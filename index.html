@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mn-enforcement</title>
+<style>
+  :root {
+    --bg: #0d0f14;
+    --surface: #141720;
+    --border: #1f2433;
+    --accent: #3b7ff5;
+    --accent2: #e84040;
+    --text: #e2e6f0;
+    --muted: #6b7591;
+    --tag-bg: #1a1f2e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100vh;
+  }
+
+  /* ── header ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 48px 0 40px;
+    text-align: center;
+  }
+  .eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 16px;
+  }
+  h1 {
+    font-size: clamp(2rem, 5vw, 3.4rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+  h1 span { color: var(--accent2); }
+  .subtitle {
+    margin-top: 16px;
+    color: var(--muted);
+    font-size: 1.05rem;
+    max-width: 560px;
+    margin-left: auto;
+    margin-right: auto;
+    line-height: 1.6;
+  }
+
+  /* ── main grid ── */
+  main {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 56px 24px 80px;
+  }
+
+  .section-label {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+    margin-bottom: 56px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 28px;
+    text-decoration: none;
+    color: var(--text);
+    transition: border-color 0.15s, transform 0.15s;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+  }
+  .card-icon {
+    font-size: 1.6rem;
+    line-height: 1;
+  }
+  .card-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+  }
+  .card-desc {
+    font-size: 0.875rem;
+    color: var(--muted);
+    line-height: 1.55;
+    flex: 1;
+  }
+  .card-cta {
+    font-size: 0.8rem;
+    color: var(--accent);
+    font-weight: 500;
+    margin-top: 4px;
+  }
+  .card.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+  .tag {
+    display: inline-block;
+    background: var(--tag-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    text-transform: uppercase;
+    align-self: flex-start;
+  }
+  .tag.live { border-color: #2a4a2a; color: #4caf50; background: #0e1a0e; }
+  .tag.soon { border-color: #3a3020; color: #f5a623; background: #1a1500; }
+
+  /* ── insight block ── */
+  .insight {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent2);
+    border-radius: 10px;
+    padding: 28px 32px;
+    margin-bottom: 56px;
+  }
+  .insight h3 {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--accent2);
+    margin-bottom: 14px;
+  }
+  .insight p {
+    font-size: 0.95rem;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+  .insight p + p { margin-top: 10px; }
+  .insight strong { color: var(--text); font-weight: 500; }
+
+  /* ── stat row ── */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 56px;
+  }
+  .stat {
+    background: var(--surface);
+    padding: 24px 20px;
+    text-align: center;
+  }
+  .stat-val {
+    font-size: 1.8rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+  .stat-val span { color: var(--accent); }
+  .stat-lbl {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+
+  /* ── footer ── */
+  footer {
+    border-top: 1px solid var(--border);
+    text-align: center;
+    padding: 28px;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  footer a { color: var(--accent); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">Systems Analysis</div>
+  <h1>MN <span>Enforcement</span></h1>
+  <p class="subtitle">
+    Minnesota traffic enforcement modeled as a network of institutional agents —
+    visualized, simulated, and grounded in actual citation geography.
+  </p>
+</header>
+
+<main>
+
+  <!-- tools -->
+  <div class="section-label">Interactive tools</div>
+  <div class="cards">
+
+    <a class="card" href="mn_enforcement_map_gmaps.html">
+      <div class="tag live">Live</div>
+      <div class="card-icon">🗺️</div>
+      <div class="card-title">Twin Cities Enforcement Map</div>
+      <div class="card-desc">
+        MSP citation hotspots across the metro. Time-of-day predictions,
+        hotspot type classification, and guided tour. No install needed.
+      </div>
+      <div class="card-cta">Open map →</div>
+    </a>
+
+    <a class="card" href="mn_power_structure.html">
+      <div class="tag live">Live</div>
+      <div class="card-icon">🕸️</div>
+      <div class="card-title">Institutional Power Structure</div>
+      <div class="card-desc">
+        9-tier hierarchical network of 27 actors and 35 directed relationships.
+        Federal funding flows through to the street-level trooper.
+        Pan, zoom, click nodes.
+      </div>
+      <div class="card-cta">Open diagram →</div>
+    </a>
+
+    <div class="card disabled">
+      <div class="tag soon">Soon</div>
+      <div class="card-icon">📊</div>
+      <div class="card-title">Budget Cascade</div>
+      <div class="card-desc">
+        $66B biennial budget traced from the legislature to MSP — with
+        anomaly flags where incentives don't align.
+      </div>
+    </div>
+
+    <div class="card disabled">
+      <div class="tag soon">Soon</div>
+      <div class="card-icon">♟️</div>
+      <div class="card-title">Driver Chess Moves</div>
+      <div class="card-desc">
+        Every statutable defense after a stop — anchored to MN Stat. §169.14,
+        §169.91, and MRE 801(d)(2).
+      </div>
+    </div>
+
+  </div>
+
+  <!-- key insight -->
+  <div class="section-label">Key insight</div>
+  <div class="insight">
+    <h3>Why enforcement geography is a labor contract output</h3>
+    <p>
+      The spatial distribution of MSP enforcement is not a public safety decision.
+      It is the joint product of <strong>seniority bidding under the MELS CBA</strong>
+      (troopers pick zones; management cannot override),
+      <strong>road geometry</strong> (no paved shoulder = enforcement shadow),
+      <strong>NHTSA grant targets</strong> ($18M/yr shapes citation priorities), and
+      <strong>shift-change dead zones</strong> (3× daily, ~45 min each).
+    </p>
+    <p>
+      The Governor, the Legislature, and MSP leadership <strong>cannot place a specific trooper
+      at a specific location</strong>. The union contract runs beneath all of them.
+    </p>
+  </div>
+
+  <!-- stats -->
+  <div class="section-label">By the numbers</div>
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-val">$<span>66</span>B</div>
+      <div class="stat-lbl">MN biennial budget</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val"><span>0.6</span>%</div>
+      <div class="stat-lbl">share reaching MSP</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val"><span>27</span></div>
+      <div class="stat-lbl">institutional actors modeled</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val"><span>9</span></div>
+      <div class="stat-lbl">tiers of hierarchy</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val"><span>$0</span></div>
+      <div class="stat-lbl">fine revenue back to MSP</div>
+    </div>
+  </div>
+
+  <!-- code -->
+  <div class="section-label">Agent simulation</div>
+  <div class="cards">
+    <a class="card" href="https://github.com/jaybenne2001/mn-enforcement/tree/main/mn_agents">
+      <div class="tag live">Python</div>
+      <div class="card-icon">🤖</div>
+      <div class="card-title">Institution Agent Classes</div>
+      <div class="card-desc">
+        Governor, MSP Leadership, Post Commander, Trooper, MELS union, and Driver —
+        each modeled with an objective function, constraint set, and behavioral
+        responses to budget cuts, political pressure, and media events.
+      </div>
+      <div class="card-cta">View on GitHub →</div>
+    </a>
+  </div>
+
+</main>
+
+<footer>
+  <p>
+    Data: <a href="https://dps.mn.gov" target="_blank">MN DPS</a> ·
+    <a href="https://www.dot.state.mn.us/maps/gdma/" target="_blank">MnDOT</a> ·
+    <a href="https://mn.gov/mmb/budget/" target="_blank">MN MMB</a> ·
+    MELS CBA (Bureau of Mediation Services) ·
+    <a href="https://github.com/jaybenne2001/mn-enforcement" target="_blank">GitHub</a>
+  </p>
+</footer>
+
+</body>
+</html>
