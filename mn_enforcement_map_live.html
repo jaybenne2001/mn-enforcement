@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MSP Enforcement Map — Live</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0d1117; color: #e6edf3; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+#header { padding: 7px 14px; background: #161b22; border-bottom: 1px solid #30363d; display: flex; align-items: center; gap: 10px; flex-shrink: 0; flex-wrap: wrap; z-index: 1000; position: relative; }
+#header h1 { font-size: 14px; font-weight: 600; color: #58a6ff; white-space: nowrap; }
+.ctrl-group { display: flex; gap: 3px; }
+.ctrl-btn { padding: 3px 9px; border-radius: 4px; border: 1px solid #30363d; background: #21262d; color: #8b949e; font-size: 11px; cursor: pointer; transition: all .15s; }
+.ctrl-btn.active { background: #388bfd22; border-color: #388bfd; color: #58a6ff; }
+.ctrl-btn:hover:not(.active) { background: #30363d; color: #e6edf3; }
+.ctrl-sep { color: #30363d; font-size: 11px; align-self: center; }
+.toggle-btn { padding: 3px 9px; border-radius: 4px; border: 1px solid #30363d; background: #21262d; color: #8b949e; font-size: 11px; cursor: pointer; transition: all .15s; }
+.toggle-btn.on { background: #14532d22; border-color: #22c55e; color: #4ade80; }
+#map-wrap { flex: 1; position: relative; }
+#map { height: 100%; width: 100%; }
+/* Dark map overlay tint */
+.leaflet-tile { filter: brightness(0.85) saturate(0.7); }
+#detail { position: absolute; right: 0; top: 0; width: 290px; height: 100%; background: #161b22f0; border-left: 1px solid #30363d; padding: 14px; overflow-y: auto; z-index: 1000; transform: translateX(100%); transition: transform .22s ease; }
+#detail.open { transform: translateX(0); }
+#detail-close { float: right; background: none; border: none; color: #8b949e; font-size: 16px; cursor: pointer; line-height: 1; margin: -2px -2px 8px 0; }
+#detail h2 { font-size: 13px; color: #f0f6fc; margin-bottom: 3px; line-height: 1.3; }
+#detail .sub { font-size: 11px; color: #8b949e; margin-bottom: 10px; }
+.detail-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #21262d; font-size: 11px; gap: 8px; }
+.detail-row .k { color: #8b949e; white-space: nowrap; flex-shrink: 0; }
+.detail-row .v { color: #e6edf3; font-weight: 500; text-align: right; }
+.risk-bar-wrap { margin: 8px 0 10px; }
+.risk-bar-bg { height: 7px; background: #21262d; border-radius: 4px; overflow: hidden; }
+.risk-bar-fill { height: 100%; border-radius: 4px; transition: width .35s; }
+.risk-label { font-size: 11px; margin-top: 4px; font-weight: 600; }
+.risk-LOW { color: #3fb950; } .risk-MODERATE { color: #d29922; } .risk-ELEVATED { color: #e3661a; } .risk-HIGH { color: #f85149; }
+.tip-box { background: #0d1117; border-radius: 5px; padding: 7px 9px; margin: 5px 0; font-size: 11px; line-height: 1.5; color: #c9d1d9; }
+.tip-head { color: #6e7681; font-size: 10px; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 3px; }
+.legend { position: absolute; bottom: 28px; left: 10px; background: #161b22ee; border: 1px solid #30363d; border-radius: 6px; padding: 7px 10px; font-size: 10px; z-index: 999; pointer-events: none; }
+.legend-row { display: flex; align-items: center; gap: 5px; margin: 2px 0; }
+.ld { width: 20px; height: 4px; border-radius: 2px; flex-shrink: 0; }
+.lp { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.ls { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+#statusbar { flex-shrink: 0; background: #161b22; border-top: 1px solid #30363d; padding: 4px 14px; display: flex; align-items: center; gap: 16px; font-size: 10px; color: #8b949e; flex-wrap: wrap; z-index: 1000; position: relative; }
+#statusbar strong { color: #e6edf3; }
+.leaflet-popup-content-wrapper { background: #161b22; border: 1px solid #30363d; color: #e6edf3; border-radius: 6px; font-size: 11px; }
+.leaflet-popup-tip { background: #161b22; }
+.leaflet-popup-content { margin: 8px 10px; line-height: 1.5; }
+.leaflet-control-zoom { border: 1px solid #30363d !important; }
+.leaflet-control-zoom a { background: #21262d !important; color: #8b949e !important; border-color: #30363d !important; }
+.leaflet-control-zoom a:hover { background: #30363d !important; color: #e6edf3 !important; }
+.leaflet-control-attribution { background: #161b22 !important; color: #4b5563 !important; font-size: 9px !important; }
+.leaflet-control-attribution a { color: #6e7681 !important; }
+#traffic-note { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: #161b22; border: 1px solid #388bfd; border-radius: 8px; padding: 16px 20px; z-index: 2000; max-width: 320px; font-size: 12px; line-height: 1.6; }
+#traffic-note h3 { color: #58a6ff; margin-bottom: 8px; font-size: 13px; }
+#traffic-note code { background: #21262d; padding: 1px 5px; border-radius: 3px; font-size: 11px; color: #e6edf3; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>🗺 MSP Enforcement Map — Live</h1>
+  <span class="ctrl-sep">SHIFT:</span>
+  <div class="ctrl-group" id="shift-btns">
+    <button class="ctrl-btn" data-shift="all" onclick="setShift('all')">All Day</button>
+    <button class="ctrl-btn" data-shift="day" onclick="setShift('day')">Day 6a–4p</button>
+    <button class="ctrl-btn" data-shift="eve" onclick="setShift('eve')">Eve 2p–12a</button>
+    <button class="ctrl-btn" data-shift="night" onclick="setShift('night')">Night 10p–8a</button>
+  </div>
+  <span class="ctrl-sep">MODE:</span>
+  <div class="ctrl-group" id="mode-btns">
+    <button class="ctrl-btn" data-mode="1" onclick="setMode(1)">+1–14</button>
+    <button class="ctrl-btn" data-mode="2" onclick="setMode(2)">+15–29</button>
+    <button class="ctrl-btn" data-mode="3" onclick="setMode(3)">+30–49</button>
+    <button class="ctrl-btn" data-mode="4" onclick="setMode(4)">+50/100+</button>
+  </div>
+  <span class="ctrl-sep">LAYERS:</span>
+  <div class="ctrl-group">
+    <button class="toggle-btn" id="btn-hotspots" onclick="toggleLayer('hotspots')">🚔 Hotspots</button>
+    <button class="toggle-btn" id="btn-cameras" onclick="toggleLayer('cameras')">📷 Cameras</button>
+    <button class="toggle-btn" id="btn-stations" onclick="toggleLayer('stations')">🏢 Stations</button>
+    <button class="toggle-btn" id="btn-traffic" onclick="toggleTraffic()">🚦 Traffic</button>
+  </div>
+</div>
+
+<div id="map-wrap">
+  <div id="map"></div>
+
+  <div class="legend">
+    <div style="color:#6e7681;font-size:10px;font-weight:600;margin-bottom:4px">ENFORCEMENT RISK</div>
+    <div class="legend-row"><div class="ld" style="background:#3fb950"></div><span style="color:#3fb950">Low &lt;30</span></div>
+    <div class="legend-row"><div class="ld" style="background:#d29922"></div><span style="color:#d29922">Moderate 30–55</span></div>
+    <div class="legend-row"><div class="ld" style="background:#e3661a"></div><span style="color:#e3661a">Elevated 55–75</span></div>
+    <div class="legend-row"><div class="ld" style="background:#f85149"></div><span style="color:#f85149">High 75+</span></div>
+    <div style="border-top:1px solid #30363d;margin:4px 0"></div>
+    <div class="legend-row"><div class="lp" style="background:#7c2d12;border:1.5px solid #fb923c"></div><span style="color:#fb923c">Trooper Hotspot</span></div>
+    <div class="legend-row"><div class="ls" style="background:#4c1d95;border:1.5px solid #a855f7"></div><span style="color:#a855f7">Speed Camera</span></div>
+    <div class="legend-row"><div class="lp" style="background:#0c4a6e;border:1.5px solid #38bdf8"></div><span style="color:#38bdf8">MSP Station</span></div>
+  </div>
+
+  <div id="detail">
+    <button id="detail-close" onclick="closeDetail()">✕</button>
+    <div id="detail-content"></div>
+  </div>
+
+  <div id="traffic-note">
+    <h3>🚦 Live Traffic Layer</h3>
+    <p>Traffic data requires a free Mapbox API key.<br><br>
+    1. Sign up free at <strong>mapbox.com</strong><br>
+    2. Copy your public token<br>
+    3. Replace <code>YOUR_MAPBOX_TOKEN</code> in line ~380 of this file<br>
+    4. Click Traffic again to enable<br><br>
+    <em>Or use Google Maps / Apple Maps alongside this tool for live traffic — open both side by side.</em></p>
+    <div style="margin-top:10px;text-align:right">
+      <button onclick="document.getElementById('traffic-note').style.display='none'" style="padding:4px 12px;background:#21262d;border:1px solid #30363d;color:#8b949e;border-radius:4px;cursor:pointer;font-size:11px">Got it</button>
+    </div>
+  </div>
+</div>
+
+<div id="statusbar">
+  <div>📊 <strong>235,961</strong> citations (2018–2024)</div>
+  <div>👮 West Metro D2500: <strong>74</strong> troopers · East Metro D2400: <strong>66</strong> troopers</div>
+  <div>🕐 Shift: <strong id="cur-shift-name">—</strong></div>
+  <div>⚠️ Aircraft VASCAR on I-94 &amp; I-35 — invisible to ALL detectors</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+// ── MAP INIT ─────────────────────────────────────────────────────────────────
+const map = L.map('map', {
+  center: [44.965, -93.27],
+  zoom: 11,
+  zoomControl: true,
+  preferCanvas: true
+});
+
+// Dark OSM base tile
+const osmDark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_matter/{z}/{x}/{y}{r}.png', {
+  attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a> © <a href="https://carto.com">CARTO</a>',
+  subdomains: 'abcd', maxZoom: 19
+}).addTo(map);
+
+// Traffic tile layer (Mapbox — replace token)
+// const MAPBOX_TOKEN = 'YOUR_MAPBOX_TOKEN';
+// const trafficLayer = L.tileLayer(
+//   `https://api.mapbox.com/styles/v1/mapbox/traffic-day-v2/tiles/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}`,
+//   { tileSize: 512, zoomOffset: -1, attribution: '© Mapbox' }
+// );
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+let curShift = 'all', curMode = 1;
+const layerVis = { hotspots: true, cameras: true, stations: true };
+let trafficOn = false;
+
+// ── DATA ──────────────────────────────────────────────────────────────────────
+// coords = [[lat, lon], ...] (Leaflet order: lat first, negative longitude for West)
+const segments = [
+  {id:'i94-west',label:'I-94',sub:'West (I-494→Minneapolis)',full:'I-94 West Approach to Minneapolis',
+   coords:[[44.892,-93.520],[44.906,-93.465],[44.920,-93.405],[44.940,-93.355],[44.958,-93.315],[44.971,-93.284]],
+   w:6,base:82,eq:'Ka 34.7 GHz I/O, LIDAR',hot:'Weekday 7–9 AM, 4–7 PM; Fri/Sat',
+   notes:'High-volume corridor. VASCAR aircraft active. Construction zones near downtown.',
+   shift:{day:1.15,eve:1.18,night:0.80},mode:{1:1.0,2:1.28,3:1.62,4:1.95},pleas:{cfd:62,nonmov:24,contest:14},
+   v1:'Ka pop-on common from overpass patrol. Lock Rampant Ka. DragonEye LIDAR from motorcycles.',
+   waze:'Enable Police Visible reports. Check Hazard pins near downtown interchanges.'},
+
+  {id:'i94-stp-45',label:'I-94 ⚠',sub:'St Paul 45 mph Zone (Cretin→Mounds)',full:'I-94 St Paul 45 mph Zone — HIGHEST RISK',
+   coords:[[44.971,-93.284],[44.969,-93.260],[44.966,-93.235],[44.962,-93.205],[44.955,-93.175],[44.952,-93.155],[44.952,-93.135],[44.953,-93.108],[44.952,-93.088]],
+   w:8,base:95,eq:'Ka 34.7 GHz I/O, VASCAR Aircraft, DragonEye LIDAR',hot:'All day — heaviest 7–9 AM, 4–7 PM, Fri night',
+   notes:'45 mph limit. Most heavily enforced corridor in metro. VASCAR aircraft invisible to ALL detectors. Officers know travelers miss the limit drop.',
+   shift:{day:1.22,eve:1.28,night:0.92},mode:{1:1.0,2:1.38,3:1.72,4:1.95},pleas:{cfd:48,nonmov:20,contest:32},
+   v1:'Instant-on Ka standard. V1 may not alert before lock. KEEP SPEED AT 45. Cretin Ave = max trooper density.',
+   waze:'Always 3–5 police markers in Waze. Check before entering every time.'},
+
+  {id:'i94-stp-east',label:'I-94',sub:'St Paul East (I-35E→Woodbury)',full:'I-94 East — St Paul to Woodbury',
+   coords:[[44.952,-93.088],[44.940,-93.062],[44.926,-93.040],[44.912,-93.015],[44.900,-92.990],[44.890,-92.960]],
+   w:6,base:68,eq:'Ka 34.7 GHz, LIDAR',hot:'Fri/Sat evening, Sun morning',
+   notes:'Moderate enforcement. Rises on weekends with WI-bound traffic. Woodbury exit patrol.',
+   shift:{day:1.0,eve:1.15,night:0.72},mode:{1:1.0,2:1.28,3:1.62,4:1.95},pleas:{cfd:65,nonmov:20,contest:15},
+   v1:'Relatively clear. Ka near Maplewood hospital. Note Woodbury exit patrol.',
+   waze:'Check weekend evenings near Woodbury exits.'},
+
+  {id:'i35w-north',label:'I-35W',sub:'North (I-694→Downtown Mpls)',full:'I-35W North Minneapolis',
+   coords:[[45.065,-93.268],[45.040,-93.268],[45.015,-93.267],[44.992,-93.266],[44.978,-93.265],[44.972,-93.263]],
+   w:6,base:58,eq:'Ka 34.7 GHz, K-band',hot:'Weekday AM rush 7–9 AM',
+   notes:'Moderate. Wide median near I-694 — officers park mid-road with LIDAR.',
+   shift:{day:1.12,eve:1.02,night:0.68},mode:{1:1.0,2:1.28,3:1.62,4:1.95},pleas:{cfd:68,nonmov:20,contest:12},
+   v1:'Median LIDAR may not trigger V1 until you pass. Alert early northbound.',
+   waze:'Morning rush reports accurate here. Add your own sightings.'},
+
+  {id:'i35w-south',label:'I-35W ⚠',sub:'South (Downtown→I-494)',full:'I-35W South Minneapolis to Bloomington',
+   coords:[[44.972,-93.263],[44.952,-93.265],[44.932,-93.267],[44.912,-93.268],[44.892,-93.268],[44.872,-93.269],[44.855,-93.270]],
+   w:6,base:80,eq:'Ka 34.7 GHz I/O, DragonEye LIDAR, aircraft',hot:'Weekdays 7–9 AM, 4–7 PM; Fri/Sat',
+   notes:'Second-highest enforcement corridor. American Blvd and 98th St exits prime spots.',
+   shift:{day:1.15,eve:1.22,night:0.85},mode:{1:1.0,2:1.28,3:1.62,4:1.95},pleas:{cfd:55,nonmov:22,contest:23},
+   v1:'Instant-on Ka from bridges at American Blvd and 98th St. Anticipate near those exits.',
+   waze:'Heavy Waze reporting here. Check diamond lane reports too.'},
+
+  {id:'i35w-burns',label:'I-35W',sub:'Burnsville/Lakeville',full:'I-35W South Suburbs',
+   coords:[[44.855,-93.270],[44.830,-93.272],[44.805,-93.275],[44.778,-93.278],[44.750,-93.280]],
+   w:5,base:44,eq:'Ka 34.7 GHz, LIDAR',hot:'Friday evenings',
+   notes:'Lighter enforcement south of 494. Construction zones periodic.',
+   shift:{day:1.0,eve:1.0,night:0.62},mode:{1:1.0,2:1.18,3:1.48,4:1.78},pleas:{cfd:70,nonmov:18,contest:12},
+   v1:'Cleaner environment south of metro.',
+   waze:'Fewer live reports — set alert distance high.'},
+
+  {id:'i35e-north',label:'I-35E',sub:'North (I-694→Downtown StP)',full:'I-35E North (Roseville to St Paul)',
+   coords:[[45.048,-93.103],[45.022,-93.104],[44.998,-93.104],[44.975,-93.104],[44.958,-93.103],[44.952,-93.088]],
+   w:6,base:72,eq:'Ka 34.7 GHz, LIDAR',hot:'Weekday rush AM/PM, Fri nights',
+   notes:'Busy connector. Rice St bridge is known enforcement spot.',
+   shift:{day:1.10,eve:1.15,night:0.78},mode:{1:1.0,2:1.28,3:1.62,4:1.95},pleas:{cfd:62,nonmov:22,contest:16},
+   v1:'Ka along tunnel walls; moderate false alerts near Rosedale retail.',
+   waze:'Check Rice St and Larpenteur exits for patrol markers.'},
+
+  {id:'i35e-south',label:'I-35E ⚠',sub:'South (I-94→I-494) TOP RISK',full:'I-35E South — Highest Enforcement Corridor',
+   coords:[[44.952,-93.088],[44.936,-93.100],[44.920,-93.108],[44.904,-93.117],[44.889,-93.125],[44.874,-93.135],[44.860,-93.148],[44.848,-93.158]],
+   w:6,base:90,eq:'Ka 34.7 GHz I/O, DragonEye LIDAR (motorcycles), VASCAR',hot:'All day; heaviest Fri/Sat PM',
+   notes:'Highest single-corridor enforcement in metro. River bluffs create radar shadows. Instant-on from ramp overpasses. Winding road hides patrol.',
+   shift:{day:1.20,eve:1.32,night:0.90},mode:{1:1.0,2:1.40,3:1.78,4:1.95},pleas:{cfd:47,nonmov:20,contest:33},
+   v1:'Ka alert here = slow immediately. DragonEye from motorcycles in curves — watch front AND rear.',
+   waze:'Highest Waze police density in metro. Reports accurate. Check Shepard Rd merge.'},
+
+  {id:'i494-west',label:'I-494',sub:'West (Eden Prairie/Plymouth)',full:'I-494 West Leg',
+   coords:[[44.893,-93.518],[44.875,-93.505],[44.858,-93.490],[44.845,-93.472],[44.838,-93.455],[44.836,-93.438]],
+   w:6,base:72,eq:'Ka 34.7 GHz, K-band',hot:'Weekday evenings, Fri AM',
+   notes:'US-169 and Hwy 62 exits have regular patrol. Tech corridor enforcement.',
+   shift:{day:1.05,eve:1.15,night:0.75},mode:{1:1.0,2:1.28,3:1.62,4:1.95},pleas:{cfd:62,nonmov:22,contest:16},
+   v1:'Wide sightlines. False Ka from HOV sensors and MnDOT DMS signs.',
+   waze:'Check Hwy 169 interchange and near Best Buy HQ campus exits.'},
+
+  {id:'i494-south',label:'I-494',sub:'South (Bloomington/Airport)',full:'I-494 South — Airport Corridor',
+   coords:[[44.836,-93.438],[44.832,-93.400],[44.830,-93.362],[44.832,-93.325],[44.838,-93.292],[44.852,-93.268],[44.858,-93.245],[44.860,-93.222]],
+   w:6,base:75,eq:'Ka 34.7 GHz I/O, DragonEye LIDAR, aircraft',hot:'All day; holiday weekends highest',
+   notes:'Airport-area heavy enforcement. Portland Ave, Nicollet Ave, Cedar Ave exits prime hotspots.',
+   shift:{day:1.12,eve:1.22,night:0.82},mode:{1:1.0,2:1.28,3:1.62,4:1.95},pleas:{cfd:60,nonmov:22,contest:18},
+   v1:'Airport Ka false alerts from ground radar, fuel trucks. Motorcycle LIDAR near MoA.',
+   waze:'MoA and airport = very active Waze community. Highly reliable.'},
+
+  {id:'i494-east',label:'I-494',sub:'East (Eagan/South StP)',full:'I-494 East Leg',
+   coords:[[44.860,-93.222],[44.862,-93.192],[44.863,-93.165],[44.862,-93.142],[44.860,-93.118],[44.858,-93.095]],
+   w:6,base:62,eq:'Ka 34.7 GHz, LIDAR',hot:'Weekday rush PM',
+   notes:'Lower enforcement density than south. Cedar Ave and Hwy 13 exits notable.',
+   shift:{day:1.0,eve:1.10,night:0.70},mode:{1:1.0,2:1.28,3:1.55,4:1.85},pleas:{cfd:65,nonmov:22,contest:13},
+   v1:'Quieter corridor. Standard V1 sensitivity adequate.',
+   waze:'Reports sparse — supplement with personal attention at ramps.'},
+
+  {id:'i694-west',label:'I-694',sub:'West (Brooklyn Park→I-35W)',full:'I-694 West Leg',
+   coords:[[45.076,-93.432],[45.070,-93.392],[45.068,-93.355],[45.067,-93.315],[45.065,-93.285],[45.065,-93.268]],
+   w:6,base:58,eq:'Ka 34.7 GHz, K-band',hot:'Weekday AM rush; Fri evenings',
+   notes:'Moderate enforcement. Brooklyn Blvd and Hwy 252 exits notable.',
+   shift:{day:1.05,eve:1.05,night:0.62},mode:{1:1.0,2:1.20,3:1.52,4:1.80},pleas:{cfd:67,nonmov:20,contest:13},
+   v1:'Open terrain; good early warning. Ka false alerts from Brooklyn Blvd retail.',
+   waze:'Check Brooklyn Blvd bridge area for standing patrol.'},
+
+  {id:'i694-east',label:'I-694',sub:'East (I-35W→I-94 Woodbury)',full:'I-694 East Leg',
+   coords:[[45.065,-93.268],[45.052,-93.228],[45.033,-93.188],[45.015,-93.152],[44.998,-93.112],[44.975,-93.078],[44.952,-93.048],[44.928,-93.015],[44.904,-92.982]],
+   w:6,base:62,eq:'Ka 34.7 GHz, LIDAR',hot:'Weekday PM rush; Fri/Sat',
+   notes:'I-35E junction and Rice St/White Bear Ave area elevated enforcement.',
+   shift:{day:1.0,eve:1.15,night:0.70},mode:{1:1.0,2:1.28,3:1.62,4:1.95},pleas:{cfd:63,nonmov:20,contest:17},
+   v1:'Some Ka false alerts in residential areas. Trust strong alerts.',
+   waze:'Active community in Maplewood/Roseville. Rice St bridge frequently reported.'},
+
+  {id:'i394',label:'I-394',sub:'Plymouth→Minneapolis',full:'I-394 (Plymouth to I-94)',
+   coords:[[44.962,-93.558],[44.964,-93.515],[44.967,-93.470],[44.970,-93.428],[44.972,-93.388],[44.973,-93.348],[44.973,-93.315],[44.973,-93.290]],
+   w:5,base:55,eq:'Ka 34.7 GHz, K-band, LIDAR',hot:'Weekday 7–9 AM inbound, 4–7 PM outbound',
+   notes:'Heavy AM inbound / PM outbound. HOV/MnPASS lanes.',
+   shift:{day:1.15,eve:1.12,night:0.58},mode:{1:1.0,2:1.20,3:1.50,4:1.80},pleas:{cfd:65,nonmov:22,contest:13},
+   v1:'HOV lane sensors generate K-band. Good sightlines Plymouth→Hwy 169.',
+   waze:'Check County Rd 73 and Hwy 100 overpass areas for patrol.'},
+
+  {id:'hwy100',label:'Hwy 100',sub:'Golden Valley/Bloomington',full:'Hwy 100 North-South',
+   coords:[[45.055,-93.385],[45.025,-93.385],[44.998,-93.384],[44.972,-93.382],[44.950,-93.380],[44.928,-93.379],[44.905,-93.377],[44.880,-93.374],[44.855,-93.372]],
+   w:4,base:45,eq:'Ka 34.7 GHz, K-band',hot:'Weekday rush hours',
+   notes:'Moderate enforcement. Near I-394 junction sees more patrol.',
+   shift:{day:1.05,eve:1.05,night:0.58},mode:{1:1.0,2:1.18,3:1.45,4:1.75},pleas:{cfd:68,nonmov:20,contest:12},
+   v1:'Commercial zone Ka false alerts common. Strong alerts near overpasses worth action.',
+   waze:'Light reporting — be your own lookout here.'},
+
+  {id:'hwy36',label:'Hwy 36',sub:'Stillwater→Roseville→St Louis Park',full:'Hwy 36 East-West',
+   coords:[[45.005,-93.562],[45.002,-93.510],[44.999,-93.460],[44.998,-93.410],[44.999,-93.360],[45.000,-93.310],[45.002,-93.260],[45.002,-93.210],[45.002,-93.165],[45.003,-93.115],[45.002,-93.068],[44.999,-93.022]],
+   w:4,base:50,eq:'Ka 34.7 GHz, LIDAR',hot:'Weekday AM/PM; Sat morning',
+   notes:'Growing enforcement. I-35E/Hwy 36 junction active. Lexington Ave common patrol.',
+   shift:{day:1.05,eve:1.0,night:0.58},mode:{1:1.0,2:1.20,3:1.50,4:1.78},pleas:{cfd:67,nonmov:20,contest:13},
+   v1:'Good V1 range on suburban corridor. Watch near major cross streets.',
+   waze:'Check near Lexington Ave and Rice St intersections.'},
+
+  {id:'us169',label:'US-169',sub:'Eden Prairie→Brooklyn Park',full:'US-169 North-South',
+   coords:[[45.095,-93.462],[45.065,-93.460],[45.038,-93.458],[45.010,-93.455],[44.982,-93.452],[44.955,-93.450],[44.928,-93.448],[44.900,-93.445],[44.870,-93.443],[44.842,-93.440],[44.815,-93.438]],
+   w:4,base:38,eq:'Ka 34.7 GHz, K-band',hot:'Weekday AM/PM rush',
+   notes:'Lower enforcement density. I-494 junction active.',
+   shift:{day:1.0,eve:1.0,night:0.52},mode:{1:1.0,2:1.15,3:1.40,4:1.70},pleas:{cfd:70,nonmov:20,contest:10},
+   v1:'Open terrain; excellent V1 range. Fewer false alerts.',
+   waze:'Sparse reports — attention at I-494 and I-394 junctions.'},
+
+  {id:'us61',label:'US-61',sub:'St Paul→Woodbury',full:'US-61 North-South',
+   coords:[[45.068,-93.042],[45.040,-93.040],[45.012,-93.038],[44.984,-93.036],[44.958,-93.034],[44.930,-93.032],[44.900,-93.028],[44.870,-93.025]],
+   w:4,base:42,eq:'Ka 34.7 GHz, LIDAR',hot:'Weekends; Fri evening',
+   notes:'Steady but lower-frequency enforcement. Lake Elmo patrol area.',
+   shift:{day:1.0,eve:1.05,night:0.58},mode:{1:1.0,2:1.18,3:1.45,4:1.75},pleas:{cfd:68,nonmov:20,contest:12},
+   v1:'Low false-alert environment east of StP.',
+   waze:'Check near I-694/I-94 east junction.'},
+
+  {id:'hwy77',label:'Hwy 77',sub:'Cedar Ave (Mpls→Apple Valley)',full:'Hwy 77 / Cedar Ave',
+   coords:[[44.995,-93.243],[44.975,-93.240],[44.952,-93.237],[44.928,-93.233],[44.905,-93.229],[44.880,-93.225],[44.857,-93.222],[44.832,-93.220],[44.808,-93.218]],
+   w:4,base:44,eq:'Ka 34.7 GHz, K-band',hot:'Weekday AM/PM rush; Fri',
+   notes:'Speed limit drops near residential areas. I-494 crossing enforcement active.',
+   shift:{day:1.0,eve:1.10,night:0.62},mode:{1:1.0,2:1.18,3:1.45,4:1.75},pleas:{cfd:67,nonmov:20,contest:13},
+   v1:'MoA / Best Buy area generates Ka false alerts near/south of I-494.',
+   waze:'Check near I-494 and Burnsville Pkwy crossings.'},
+
+  {id:'hwy13',label:'Hwy 13',sub:'Savage/Burnsville',full:'Hwy 13 East-West',
+   coords:[[44.875,-93.220],[44.860,-93.252],[44.848,-93.282],[44.837,-93.312],[44.826,-93.340],[44.820,-93.368],[44.818,-93.396],[44.818,-93.422]],
+   w:3,base:32,eq:'Ka 34.7 GHz',hot:'Weekends',
+   notes:'Lower enforcement. Patrol occasional.',
+   shift:{day:1.0,eve:0.95,night:0.48},mode:{1:1.0,2:1.10,3:1.35,4:1.65},pleas:{cfd:72,nonmov:18,contest:10},
+   v1:'Light false-alert environment.',
+   waze:'Minimal reports — trust your own awareness.'}
+];
+
+// Hotspots: [lat, lon]
+const hotspots=[
+  {lat:44.920,lon:-93.117,label:'I-35E / West 7th St',note:'Trooper on West 7th ramp overpass, LIDAR targeting SB. Highly active Fri/Sat PM. Top 5 citation location in metro.'},
+  {lat:44.905,lon:-93.124,label:'I-35E / Shepard Rd',note:'Motorcycle DragonEye LIDAR on Shepard Rd overpass. Targets SB in curve — V1 may not alert until you pass.'},
+  {lat:44.892,lon:-93.134,label:'I-35E / Kellogg Blvd',note:'Right shoulder before Kellogg exit. Ka instant-on. High citation volume. Winding terrain hides patrol.'},
+  {lat:44.955,lon:-93.170,label:'I-94 / Cretin Ave StP',note:'Overpass median patrol. Ka instant-on targeting EB and WB. Highest trooper density on I-94 StP 45mph zone.'},
+  {lat:44.952,lon:-93.155,label:'I-94 / Hamline–Lexington',note:'Shoulder patrol. Targets vehicles accelerating past the 45 mph zone limit.'},
+  {lat:44.953,lon:-93.130,label:'I-94 / Dale St',note:'Near Dale St ramp. Frequently cited by Waze community. PM peak.'},
+  {lat:44.875,lon:-93.268,label:'I-35W / American Blvd',note:'Bridge overpass. Ka instant-on targeting left-lane speeders. Second-most-cited I-35W location.'},
+  {lat:44.858,lon:-93.269,label:'I-35W near I-494 S',note:'Shoulder before I-494 interchange. High citation density. Both directions.'},
+  {lat:44.922,lon:-93.267,label:'I-35W / 46th St',note:'Wide median patrol spot. LIDAR + Ka. Common morning enforcement.'},
+  {lat:44.857,lon:-93.244,label:'I-494 / Nicollet Ave',note:'Ramp overpass near Nicollet. Airport corridor — both directions. Active Fri/Sat.'},
+  {lat:44.858,lon:-93.228,label:'I-494 / Cedar Ave / MoA',note:'Near Mall of America. Ka patrol from shoulder. Very active Fri/Sat and holidays.'},
+  {lat:44.843,lon:-93.300,label:'I-494 btw Hwy 100 & Portland',note:'Between Hwy 100 and Portland Ave. Evening enforcement common.'},
+  {lat:44.840,lon:-93.450,label:'I-494 / Hwy 169',note:'Tech corridor. Ka instant-on from overpass. Weekday PM.'},
+  {lat:44.993,lon:-93.112,label:'I-694 / Rice St',note:'Bridge overpass with sightline both directions. Very frequent Waze reports.'},
+  {lat:44.920,lon:-93.030,label:'I-694 / White Bear Ave',note:'Right shoulder. Suburban corridor, regular patrol rotation.'},
+  {lat:45.068,lon:-93.352,label:'I-694 / Brooklyn Blvd',note:'Median overpass. Clocks both WB and EB. Brooklyn Park sector.'},
+  {lat:44.972,lon:-93.262,label:'I-94/I-35W Interchange',note:'Very high vehicle density. Ka instant-on from ramps. All shifts active.'},
+  {lat:45.002,lon:-93.155,label:'Hwy 36 / Lexington Ave',note:'Common patrol pullout. Lexington Ave overpass. Roseville sector.'},
+  {lat:45.022,lon:-93.104,label:'I-35E N / County Rd B',note:'Ramp and shoulder. Targets commuters NB approaching I-694.'},
+  {lat:44.958,lon:-93.034,label:'US-61 / I-694 Jct',note:'Woodbury transition. Patrol watches speed before/after merge.'},
+  {lat:44.912,lon:-93.025,label:'I-94 E / Geneva Ave',note:'Woodbury. Shoulder patrol targeting WB morning rush.'}
+];
+
+const cameras=[
+  {lat:44.985,lon:-93.274,label:'Camera: 3rd St N / 1st Ave N',note:'Downtown Minneapolis. NovoaGlobal. $40 first / $80 repeat. No license points. Active 24/7. No insurance impact during pilot.'},
+  {lat:44.998,lon:-93.298,label:'Camera: Fremont Ave N / W Broadway',note:'Near North. $40/$80. No points. School proximity zone. NOT detectable by V1.'},
+  {lat:44.995,lon:-93.245,label:'Camera: 18th Ave NE / Central Ave NE',note:'Northeast Minneapolis. Enforces 30 mph zone. Contest by requesting calibration records.'},
+  {lat:44.963,lon:-93.259,label:'Camera: Chicago Ave / Franklin Ave E',note:'Phillips neighborhood. 24/7. $40/$80. No insurance impact. CFD option may apply.'},
+  {lat:44.923,lon:-93.281,label:'Camera: Nicollet Ave / 46th St W',note:'South Minneapolis. Residential zone. V1 CANNOT detect. CFD possible.'}
+];
+
+const stations=[
+  {lat:44.992,lon:-93.368,label:'West Metro HQ',sub:'District 2500 · Golden Valley · 74 troopers',type:'hq'},
+  {lat:44.972,lon:-93.002,label:'East Metro HQ',sub:'District 2400 · Oakdale · 66 troopers',type:'hq'},
+  {lat:45.013,lon:-93.155,label:'Roseville Station',sub:'Future HQ 2027 · currently substation',type:'sub'},
+  {lat:44.792,lon:-93.270,label:'Burnsville Post',sub:'South Metro / I-35W south sector',type:'sub'},
+  {lat:44.820,lon:-93.190,label:'Eagan Post',sub:'Airport / I-494 east sector',type:'sub'}
+];
+
+// ── RISK HELPERS ──────────────────────────────────────────────────────────────
+function riskColor(s){return s<30?'#3fb950':s<55?'#d29922':s<75?'#e3661a':'#f85149';}
+function riskLabel(s){return s<30?'LOW':s<55?'MODERATE':s<75?'ELEVATED':'HIGH';}
+function adjScore(seg){
+  const sm={all:1.0,day:seg.shift.day,eve:seg.shift.eve,night:seg.shift.night}[curShift]||1.0;
+  return Math.min(99,Math.round(seg.base*sm*(seg.mode[curMode]||1.0)));
+}
+
+// ── LAYER GROUPS ──────────────────────────────────────────────────────────────
+const roadLayers = {};
+const layerGroups = {
+  hotspots: L.layerGroup().addTo(map),
+  cameras:  L.layerGroup().addTo(map),
+  stations: L.layerGroup().addTo(map)
+};
+
+// Draw roads
+segments.forEach(seg => {
+  const s = adjScore(seg), col = riskColor(s);
+  // Outline
+  const outline = L.polyline(seg.coords, {color:'#0d1117', weight:seg.w+4, opacity:1, lineCap:'round', lineJoin:'round'}).addTo(map);
+  // Colored line
+  const line = L.polyline(seg.coords, {color:col, weight:seg.w, opacity:0.92, lineCap:'round', lineJoin:'round'}).addTo(map);
+  line.on('click', () => openSeg(seg));
+  line.on('mouseover', function(){ this.setStyle({opacity:1, weight:seg.w+2}); });
+  line.on('mouseout',  function(){ this.setStyle({opacity:0.92, weight:seg.w}); });
+  roadLayers[seg.id] = line;
+});
+
+// Hotspot markers
+hotspots.forEach(hs => {
+  const m = L.circleMarker([hs.lat, hs.lon], {
+    radius: 6, color:'#fb923c', fillColor:'#7c2d12', weight:2, fillOpacity:0.9
+  });
+  m.on('click', () => openHotspot(hs));
+  layerGroups.hotspots.addLayer(m);
+});
+
+// Camera markers
+cameras.forEach(cam => {
+  const icon = L.divIcon({
+    html:`<div style="width:12px;height:12px;background:#4c1d95;border:2px solid #a855f7;border-radius:2px;display:flex;align-items:center;justify-content:center;font-size:8px;color:#e9d5ff;font-weight:bold">⚡</div>`,
+    className:'', iconSize:[12,12], iconAnchor:[6,6]
+  });
+  const m = L.marker([cam.lat, cam.lon], {icon});
+  m.on('click', () => openCamera(cam));
+  layerGroups.cameras.addLayer(m);
+});
+
+// Station markers
+stations.forEach(st => {
+  const r = st.type==='hq' ? 10 : 7;
+  const m = L.circleMarker([st.lat, st.lon], {
+    radius: r, color:'#38bdf8', fillColor:'#0c4a6e', weight:2, fillOpacity:0.9
+  });
+  m.on('click', () => openStation(st));
+  layerGroups.stations.addLayer(m);
+});
+
+// ── DETAIL PANEL ──────────────────────────────────────────────────────────────
+const detail = document.getElementById('detail');
+const dc = document.getElementById('detail-content');
+
+function openSeg(seg){
+  const s=adjScore(seg),col=riskColor(s),lbl=riskLabel(s);
+  dc.innerHTML=`<h2>${seg.full}</h2><div class="sub">${seg.sub}</div>
+  <div class="risk-bar-wrap"><div class="risk-bar-bg"><div class="risk-bar-fill" style="width:${s}%;background:${col}"></div></div>
+  <div class="risk-label risk-${lbl}">Risk: ${s}/100 — ${lbl}</div></div>
+  <div class="detail-row"><span class="k">Equipment</span><span class="v">${seg.eq}</span></div>
+  <div class="detail-row"><span class="k">Peak Times</span><span class="v">${seg.hot}</span></div>
+  <div class="detail-row"><span class="k">CFD Likelihood</span><span class="v">${seg.pleas.cfd}%</span></div>
+  <div class="detail-row"><span class="k">Non-Moving Plea</span><span class="v">${seg.pleas.nonmov}%</span></div>
+  <div class="detail-row"><span class="k">Contest Chance</span><span class="v">${seg.pleas.contest}%</span></div>
+  <div class="detail-row"><span class="k">Notes</span><span class="v">${seg.notes}</span></div>
+  <div class="tip-box"><div class="tip-head">🎯 Valentine One (Gen1)</div>${seg.v1}</div>
+  <div class="tip-box"><div class="tip-head">🗺 Waze</div>${seg.waze}</div>
+  <div class="tip-box" style="background:#0d1a0d"><div class="tip-head" style="color:#3fb950">Shift ×</div>Day ×${seg.shift.day} | Eve ×${seg.shift.eve} | Night ×${seg.shift.night}</div>
+  <div class="tip-box" style="background:#0d0d1a"><div class="tip-head" style="color:#58a6ff">Speed Mode ×</div>+1–14: ×${seg.mode[1]} | +15–29: ×${seg.mode[2]} | +30–49: ×${seg.mode[3]} | +50: ×${seg.mode[4]}</div>`;
+  detail.classList.add('open');
+}
+function openHotspot(hs){
+  dc.innerHTML=`<h2>🚔 Trooper Hotspot</h2><div class="sub">${hs.label}</div>
+  <div style="background:#1a1000;border:1px solid #fb923c44;border-radius:5px;padding:9px;margin:8px 0;font-size:11px;color:#fed7aa;line-height:1.6">${hs.note}</div>
+  <div class="tip-box"><div class="tip-head">📋 Response</div>Monitor V1 approaching. Reduce speed proactively. Ka alert near here = lift immediately.</div>
+  <div class="tip-box"><div class="tip-head">🗺 Waze</div>Confirm with Police Visible/hidden markers near this intersection before passing.</div>`;
+  detail.classList.add('open');
+}
+function openCamera(cam){
+  dc.innerHTML=`<h2>${cam.label}</h2><div class="sub">Minneapolis Automated Speed Camera</div>
+  <div style="background:#1a0a2a;border:1px solid #a855f744;border-radius:5px;padding:9px;margin:8px 0;font-size:11px;color:#e9d5ff;line-height:1.6">${cam.note}</div>
+  <div class="detail-row"><span class="k">Operator</span><span class="v">NovoaGlobal Inc.</span></div>
+  <div class="detail-row"><span class="k">1st offense</span><span class="v">$40 mailed fine</span></div>
+  <div class="detail-row"><span class="k">Repeat</span><span class="v">$80 mailed fine</span></div>
+  <div class="detail-row"><span class="k">License points</span><span class="v">None (pilot)</span></div>
+  <div class="detail-row"><span class="k">Insurance impact</span><span class="v">None (pilot)</span></div>
+  <div class="detail-row"><span class="k">Active since</span><span class="v">October 1, 2025</span></div>
+  <div class="tip-box" style="background:#1a0000"><div class="tip-head" style="color:#f85149">⚠️ Detector Warning</div>NOT radar-based. V1 CANNOT detect speed cameras. Maintain posted speed regardless.</div>
+  <div class="tip-box"><div class="tip-head">📋 Plea</div>Civil citation. CFD may apply. Contest by requesting calibration records. Low urgency — no points.</div>`;
+  detail.classList.add('open');
+}
+function openStation(st){
+  const tr=st.label.includes('West')?74:st.label.includes('East')?66:'—';
+  dc.innerHTML=`<h2>🏢 ${st.label}</h2><div class="sub">${st.sub}</div>
+  <div class="detail-row"><span class="k">Type</span><span class="v">${st.type==='hq'?'District HQ':'Substation / Post'}</span></div>
+  <div class="detail-row"><span class="k">Troopers</span><span class="v">${tr}</span></div>
+  <div class="detail-row"><span class="k">Shifts</span><span class="v">Day 6a–4p · Eve 2p–12a · Night 10p–8a</span></div>
+  <div class="tip-box"><div class="tip-head">📋 Patrol Radius</div>Coverage density highest within 10-mile radius. Peak: Eve > Day > Night.</div>
+  <div class="tip-box" style="background:#0d0d1a"><div class="tip-head" style="color:#58a6ff">Shift Change Windows</div>6–8 AM · 2–4 PM · 10 PM–12 AM = minimum patrol (15–20 min gaps).</div>`;
+  detail.classList.add('open');
+}
+function closeDetail(){ detail.classList.remove('open'); }
+
+// ── CONTROLS ──────────────────────────────────────────────────────────────────
+function setShift(s){
+  curShift=s;
+  document.querySelectorAll('#shift-btns .ctrl-btn').forEach(b=>b.classList.toggle('active',b.dataset.shift===s));
+  document.getElementById('cur-shift-name').textContent={all:'All Day',day:'Day 6a–4p',eve:'Eve 2p–12a',night:'Night 10p–8a'}[s];
+  updateRoads();
+}
+function setMode(m){
+  curMode=m;
+  document.querySelectorAll('#mode-btns .ctrl-btn').forEach(b=>b.classList.toggle('active',+b.dataset.mode===m));
+  updateRoads();
+}
+function updateRoads(){
+  segments.forEach(seg=>{
+    const l=roadLayers[seg.id];
+    if(l) l.setStyle({color:riskColor(adjScore(seg))});
+  });
+}
+function toggleLayer(name){
+  const btn=document.getElementById('btn-'+name);
+  layerVis[name]=!layerVis[name];
+  btn.classList.toggle('on', layerVis[name]);
+  if(layerVis[name]) layerGroups[name].addTo(map);
+  else map.removeLayer(layerGroups[name]);
+}
+function toggleTraffic(){
+  const btn=document.getElementById('btn-traffic');
+  // Show instructions since no token is configured by default
+  document.getElementById('traffic-note').style.display='block';
+  // If you have a Mapbox token, uncomment and configure these lines:
+  // trafficOn=!trafficOn;
+  // btn.classList.toggle('on', trafficOn);
+  // if(trafficOn) trafficLayer.addTo(map); else map.removeLayer(trafficLayer);
+}
+
+// Initialize toggle button states
+['hotspots','cameras','stations'].forEach(n=>document.getElementById('btn-'+n).classList.add('on'));
+
+// Auto-set shift
+const h=new Date().getHours();
+setShift(h>=6&&h<14?'day':h>=14&&h<22?'eve':'night');
+setMode(1);
+</script>
+</body>
+</html>

@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MSP Enforcement Map — Twin Cities Metro</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0d1117; color: #e6edf3; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+#header { padding: 7px 14px; background: #161b22; border-bottom: 1px solid #30363d; display: flex; align-items: center; gap: 10px; flex-shrink: 0; flex-wrap: wrap; }
+#header h1 { font-size: 14px; font-weight: 600; color: #58a6ff; white-space: nowrap; }
+.ctrl-group { display: flex; gap: 3px; }
+.ctrl-btn { padding: 3px 9px; border-radius: 4px; border: 1px solid #30363d; background: #21262d; color: #8b949e; font-size: 11px; cursor: pointer; transition: all .15s; }
+.ctrl-btn.active { background: #388bfd22; border-color: #388bfd; color: #58a6ff; }
+.ctrl-btn:hover:not(.active) { background: #30363d; color: #e6edf3; }
+.ctrl-sep { color: #30363d; font-size: 11px; align-self: center; }
+#map-wrap { flex: 1; overflow: hidden; position: relative; }
+#svg-map { width: 100%; height: 100%; display: block; }
+.road { fill: none; stroke-linecap: round; stroke-linejoin: round; cursor: pointer; }
+.road:hover { filter: brightness(1.4) drop-shadow(0 0 3px currentColor); }
+#detail { position: absolute; right: 0; top: 0; width: 290px; height: 100%; background: #161b22ee; border-left: 1px solid #30363d; padding: 14px; overflow-y: auto; transform: translateX(100%); transition: transform .22s ease; backdrop-filter: blur(4px); }
+#detail.open { transform: translateX(0); }
+#detail-close { float: right; background: none; border: none; color: #8b949e; font-size: 16px; cursor: pointer; line-height: 1; margin: -2px -2px 8px 0; }
+#detail h2 { font-size: 13px; color: #f0f6fc; margin-bottom: 3px; line-height: 1.3; }
+#detail .sub { font-size: 11px; color: #8b949e; margin-bottom: 10px; }
+.detail-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #21262d; font-size: 11px; gap: 8px; }
+.detail-row .k { color: #8b949e; white-space: nowrap; flex-shrink: 0; }
+.detail-row .v { color: #e6edf3; font-weight: 500; text-align: right; }
+.risk-bar-wrap { margin: 8px 0 10px; }
+.risk-bar-bg { height: 7px; background: #21262d; border-radius: 4px; overflow: hidden; }
+.risk-bar-fill { height: 100%; border-radius: 4px; transition: width .35s; }
+.risk-label { font-size: 11px; margin-top: 4px; font-weight: 600; }
+.risk-LOW { color: #3fb950; } .risk-MODERATE { color: #d29922; } .risk-ELEVATED { color: #e3661a; } .risk-HIGH { color: #f85149; }
+.tip-box { background: #0d1117; border-radius: 5px; padding: 7px 9px; margin: 5px 0; font-size: 11px; line-height: 1.5; color: #c9d1d9; }
+.tip-head { color: #6e7681; font-size: 10px; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 3px; }
+.legend { position: absolute; bottom: 40px; left: 10px; background: #161b22dd; border: 1px solid #30363d; border-radius: 6px; padding: 7px 10px; font-size: 10px; pointer-events: none; }
+.legend-row { display: flex; align-items: center; gap: 5px; margin: 2px 0; }
+.ld { width: 20px; height: 4px; border-radius: 2px; flex-shrink: 0; }
+.lp { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.ls { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+#statusbar { flex-shrink: 0; background: #161b22; border-top: 1px solid #30363d; padding: 4px 14px; display: flex; align-items: center; gap: 16px; font-size: 10px; color: #8b949e; flex-wrap: wrap; }
+#statusbar strong { color: #e6edf3; }
+</style>
+</head>
+<body>
+<div id="header">
+  <h1>🗺 MSP Enforcement Map — Twin Cities Metro</h1>
+  <span class="ctrl-sep">SHIFT:</span>
+  <div class="ctrl-group" id="shift-btns">
+    <button class="ctrl-btn" data-shift="all" onclick="setShift('all')">All Day</button>
+    <button class="ctrl-btn" data-shift="day" onclick="setShift('day')">Day 6a–4p</button>
+    <button class="ctrl-btn" data-shift="eve" onclick="setShift('eve')">Eve 2p–12a</button>
+    <button class="ctrl-btn" data-shift="night" onclick="setShift('night')">Night 10p–8a</button>
+  </div>
+  <span class="ctrl-sep">MODE:</span>
+  <div class="ctrl-group" id="mode-btns">
+    <button class="ctrl-btn" data-mode="1" onclick="setMode(1)">+1–14 mph</button>
+    <button class="ctrl-btn" data-mode="2" onclick="setMode(2)">+15–29 mph</button>
+    <button class="ctrl-btn" data-mode="3" onclick="setMode(3)">+30–49 mph</button>
+    <button class="ctrl-btn" data-mode="4" onclick="setMode(4)">+50 / 100+</button>
+  </div>
+</div>
+<div id="map-wrap">
+  <svg id="svg-map" viewBox="0 0 900 580" preserveAspectRatio="xMidYMid meet"></svg>
+  <div class="legend">
+    <div style="color:#6e7681;font-size:10px;font-weight:600;margin-bottom:4px">ENFORCEMENT RISK</div>
+    <div class="legend-row"><div class="ld" style="background:#3fb950"></div><span style="color:#3fb950">Low &lt;30</span></div>
+    <div class="legend-row"><div class="ld" style="background:#d29922"></div><span style="color:#d29922">Moderate 30–55</span></div>
+    <div class="legend-row"><div class="ld" style="background:#e3661a"></div><span style="color:#e3661a">Elevated 55–75</span></div>
+    <div class="legend-row"><div class="ld" style="background:#f85149"></div><span style="color:#f85149">High 75+</span></div>
+    <div style="border-top:1px solid #30363d;margin:4px 0"></div>
+    <div class="legend-row"><div class="lp" style="background:#7c2d12;border:1.5px solid #fb923c"></div><span style="color:#fb923c">Trooper Hotspot</span></div>
+    <div class="legend-row"><div class="ls" style="background:#4c1d95;border:1.5px solid #a855f7"></div><span style="color:#a855f7">Speed Camera</span></div>
+    <div class="legend-row"><div class="lp" style="background:#0c4a6e;border:1.5px solid #38bdf8"></div><span style="color:#38bdf8">MSP Station</span></div>
+    <div style="border-top:1px solid #30363d;margin:4px 0"></div>
+    <div style="color:#1e4a70;font-size:9px">━ Mississippi River</div>
+  </div>
+  <div id="detail">
+    <button id="detail-close" onclick="closeDetail()">✕</button>
+    <div id="detail-content"></div>
+  </div>
+</div>
+<div id="statusbar">
+  <div>📊 <strong>235,961</strong> citations (2018–2024)</div>
+  <div>👮 West Metro (D2500): <strong>74</strong> troopers · East Metro (D2400): <strong>66</strong> troopers</div>
+  <div>🕐 Current shift: <strong id="cur-shift-name">—</strong></div>
+  <div>⚠️ Aircraft VASCAR on I-94 &amp; I-35 — invisible to ALL detectors</div>
+</div>
+<script>
+const LON_W=93.65,LON_E=92.86,LAT_N=45.14,LAT_S=44.62,W=900,H=580;
+function px(lon,lat){return[(LON_W-lon)/(LON_W-LON_E)*W,(LAT_N-lat)/(LAT_N-LAT_S)*H];}
+let curShift='all',curMode=1;
+
+const segments=[
+  {id:'i94-west',label:'I-94',sub:'West (I-494→Minneapolis)',full:'I-94 West Approach to Minneapolis',
+   coords:[[93.520,44.892],[93.465,44.906],[93.405,44.920],[93.355,44.940],[93.315,44.958],[93.284,44.971]],
+   w:5,base:82,eq:'Ka 34.7 GHz I/O, LIDAR',hot:'Weekday 7–9 AM, 4–7 PM; Fri/Sat',
+   notes:'High-volume corridor. VASCAR aircraft active. Construction zones near downtown.',
+   shift:{day:1.15,eve:1.18,night:0.80},mode:{1:1.0,2:1.28,3:1.62,4:1.95},pleas:{cfd:62,nonmov:24,contest:14},
+   v1:'Ka pop-on common from overpass patrol. Lock Rampant Ka. Watch DragonEye LIDAR from motorcycle units.',
+   waze:'Enable Police Visible reports. Check Hazard pins near downtown interchanges.'},
+
+  {id:'i94-stp-45',label:'I-94',sub:'⚠ St Paul 45 mph Zone (Cretin→Mounds)',full:'I-94 St Paul 45 mph Zone — HIGHEST RISK',
+   coords:[[93.284,44.971],[93.260,44.969],[93.235,44.966],[93.205,44.962],[93.175,44.955],[93.155,44.952],[93.135,44.952],[93.108,44.953],[93.088,44.952]],
+   w:6,base:95,eq:'Ka 34.7 GHz I/O, VASCAR Aircraft, DragonEye LIDAR',hot:'All day — heaviest 7–9 AM, 4–7 PM, Fri night',
+   notes:'45 mph limit. Most heavily enforced corridor in metro. VASCAR aircraft invisible to ALL detectors. Officers know travelers miss the limit drop.',
+   shift:{day:1.22,eve:1.28,night:0.92},mode:{1:1.0,2:1.38,3:1.72,4:1.95},pleas:{cfd:48,nonmov:20,contest:32},
+   v1:'Instant-on Ka standard here. V1 may not alert before radar lock. KEEP SPEED AT 45. Cretin Ave = max trooper density.',
+   waze:'Always 3–5 police markers in Waze here. Check before entering every time.'},
+
+  {id:'i94-stp-east',label:'I-94',sub:'St Paul East (I-35E→Woodbury)',full:'I-94 East St Paul to Woodbury',
+   coords:[[93.088,44.952],[93.062,44.940],[93.040,44.926],[93.015,44.912],[92.990,44.900],[92.960,44.890]],
+   w:5,base:68,eq:'Ka 34.7 GHz, LIDAR',hot:'Fri/Sat evening, Sun morning',
+   notes:'Moderate enforcement. Rises on weekends with WI-bound traffic. Woodbury exit: patrol repositions here.',
+   shift:{day:1.0,eve:1.15,night:0.72},mode:{1:1.0,2:1.28,3:1.62,4:1.95},pleas:{cfd:65,nonmov:20,contest:15},
+   v1:'Relatively clear. Ka alerts near Maplewood hospital. Note Woodbury exit patrol.',
+   waze:'Check weekend evenings near Woodbury exits.'},
+
+  {id:'i35w-north',label:'I-35W',sub:'North (I-694→Downtown Mpls)',full:'I-35W North Minneapolis',
+   coords:[[93.268,45.065],[93.268,45.040],[93.267,45.015],[93.266,44.992],[93.265,44.978],[93.263,44.972]],
+   w:5,base:58,eq:'Ka 34.7 GHz, K-band',hot:'Weekday AM rush 7–9 AM',
+   notes:'Moderate. Wide median near I-694 — officers park mid-road with LIDAR. Ramp metering area.',
+   shift:{day:1.12,eve:1.02,night:0.68},mode:{1:1.0,2:1.28,3:1.62,4:1.95},pleas:{cfd:68,nonmov:20,contest:12},
+   v1:'Median LIDAR may not trigger V1 until you pass. Alert early approaching northbound.',
+   waze:'Morning rush reports accurate here. Add your own sightings.'},
+
+  {id:'i35w-south',label:'I-35W',sub:'⚠ South (Downtown→I-494)',full:'I-35W South Minneapolis to Bloomington',
+   coords:[[93.263,44.972],[93.265,44.952],[93.267,44.932],[93.268,44.912],[93.268,44.892],[93.269,44.872],[93.270,44.855]],
+   w:5,base:80,eq:'Ka 34.7 GHz I/O, DragonEye LIDAR, aircraft',hot:'Weekdays 7–9 AM, 4–7 PM; Fri/Sat',
+   notes:'Second-highest enforcement corridor. American Blvd and 98th St exits prime spots.',
+   shift:{day:1.15,eve:1.22,night:0.85},mode:{1:1.0,2:1.28,3:1.62,4:1.95},pleas:{cfd:55,nonmov:22,contest:23},
+   v1:'Instant-on Ka from overpass bridges at American Blvd and 98th St. Anticipate near exits.',
+   waze:'Heavy Waze reporting here. Check diamond lane reports too.'},
+
+  {id:'i35w-burns',label:'I-35W',sub:'Burnsville/Lakeville',full:'I-35W South Suburbs (I-494 → Lakeville)',
+   coords:[[93.270,44.855],[93.272,44.830],[93.275,44.805],[93.278,44.778],[93.280,44.750]],
+   w:4,base:44,eq:'Ka 34.7 GHz, LIDAR',hot:'Friday evenings',
+   notes:'Lighter enforcement south of 494. Construction zones periodic.',
+   shift:{day:1.0,eve:1.0,night:0.62},mode:{1:1.0,2:1.18,3:1.48,4:1.78},pleas:{cfd:70,nonmov:18,contest:12},
+   v1:'Cleaner environment south of metro. LIDAR still used; watch for aircraft.',
+   waze:'Fewer live reports — set alert distance high.'},
+
+  {id:'i35e-north',label:'I-35E',sub:'North (I-694→Downtown StP)',full:'I-35E North (Roseville to St Paul)',
+   coords:[[93.103,45.048],[93.104,45.022],[93.104,44.998],[93.104,44.975],[93.103,44.958],[93.088,44.952]],
+   w:5,base:72,eq:'Ka 34.7 GHz, LIDAR',hot:'Weekday rush AM/PM, Fri nights',
+   notes:'Busy connector. Rice St bridge is known enforcement spot. Narrows into downtown StP.',
+   shift:{day:1.10,eve:1.15,night:0.78},mode:{1:1.0,2:1.28,3:1.62,4:1.95},pleas:{cfd:62,nonmov:22,contest:16},
+   v1:'Ka along tunnel walls; moderate false alerts near Rosedale retail.',
+   waze:'Check Rice St and Larpenteur exits for patrol markers.'},
+
+  {id:'i35e-south',label:'I-35E',sub:'⚠ South (I-94→I-494) TOP RISK',full:'I-35E South St Paul — Highest Enforcement',
+   coords:[[93.088,44.952],[93.100,44.936],[93.108,44.920],[93.117,44.904],[93.125,44.889],[93.135,44.874],[93.148,44.860],[93.158,44.848]],
+   w:5,base:90,eq:'Ka 34.7 GHz I/O, DragonEye LIDAR (motorcycles), VASCAR',hot:'All day; heaviest Fri/Sat PM',
+   notes:'Highest single-corridor enforcement in metro. River bluffs create radar shadows. Officers use instant-on from ramp overpasses. Winding road hides patrol.',
+   shift:{day:1.20,eve:1.32,night:0.90},mode:{1:1.0,2:1.40,3:1.78,4:1.95},pleas:{cfd:47,nonmov:20,contest:33},
+   v1:'Ka alert here = slow immediately. Terrain creates blind spots. DragonEye from motorcycles in curves — watch front AND rear.',
+   waze:'Highest Waze police density in metro. Reports are accurate here. Check Shepard Rd merge.'},
+
+  {id:'i494-west',label:'I-494',sub:'West (Eden Prairie/Plymouth)',full:'I-494 West Leg',
+   coords:[[93.518,44.893],[93.505,44.875],[93.490,44.858],[93.472,44.845],[93.455,44.838],[93.438,44.836]],
+   w:5,base:72,eq:'Ka 34.7 GHz, K-band',hot:'Weekday evenings, Fri AM',
+   notes:'US-169 and Hwy 62 exits have regular patrol. Tech corridor generates high-volume enforcement.',
+   shift:{day:1.05,eve:1.15,night:0.75},mode:{1:1.0,2:1.28,3:1.62,4:1.95},pleas:{cfd:62,nonmov:22,contest:16},
+   v1:'Wide sightlines. False Ka from HOV sensors. K-band from MnDOT DMS signs.',
+   waze:'Check Hwy 169 interchange and near Best Buy HQ campus exits.'},
+
+  {id:'i494-south',label:'I-494',sub:'South (Bloomington/Airport)',full:'I-494 South — Airport Corridor',
+   coords:[[93.438,44.836],[93.400,44.832],[93.362,44.830],[93.325,44.832],[93.292,44.838],[93.268,44.852],[93.245,44.858],[93.222,44.860]],
+   w:5,base:75,eq:'Ka 34.7 GHz I/O, DragonEye LIDAR, aircraft',hot:'All day; holiday weekends highest',
+   notes:'Airport-area heavy enforcement. Portland Ave, Nicollet Ave, Cedar Ave exits prime hotspots. 60 mph strictly enforced near MoA.',
+   shift:{day:1.12,eve:1.22,night:0.82},mode:{1:1.0,2:1.28,3:1.62,4:1.95},pleas:{cfd:60,nonmov:22,contest:18},
+   v1:'Airport Ka false alerts from ground radar, fuel trucks. Verify all Ka vs known locations.',
+   waze:'MoA and airport = very active Waze community. Reports highly reliable.'},
+
+  {id:'i494-east',label:'I-494',sub:'East (Eagan/South StP)',full:'I-494 East Leg',
+   coords:[[93.222,44.860],[93.192,44.862],[93.165,44.863],[93.142,44.862],[93.118,44.860],[93.095,44.858]],
+   w:5,base:62,eq:'Ka 34.7 GHz, LIDAR',hot:'Weekday rush PM',
+   notes:'Lower enforcement density than south. Cedar Ave and Hwy 13 exits notable.',
+   shift:{day:1.0,eve:1.10,night:0.70},mode:{1:1.0,2:1.28,3:1.55,4:1.85},pleas:{cfd:65,nonmov:22,contest:13},
+   v1:'Quieter corridor. Standard V1 sensitivity adequate.',
+   waze:'Reports sparse — supplement with personal attention at ramps.'},
+
+  {id:'i694-west',label:'I-694',sub:'West (Brooklyn Park→I-35W)',full:'I-694 West Leg',
+   coords:[[93.432,45.076],[93.392,45.070],[93.355,45.068],[93.315,45.067],[93.285,45.065],[93.268,45.065]],
+   w:5,base:58,eq:'Ka 34.7 GHz, K-band',hot:'Weekday AM rush; Fri evenings',
+   notes:'Moderate enforcement. Brooklyn Blvd and Hwy 252 exits notable.',
+   shift:{day:1.05,eve:1.05,night:0.62},mode:{1:1.0,2:1.20,3:1.52,4:1.80},pleas:{cfd:67,nonmov:20,contest:13},
+   v1:'Open terrain; good early warning. Ka false alerts from Brooklyn Blvd retail.',
+   waze:'Check Brooklyn Blvd bridge area for standing patrol.'},
+
+  {id:'i694-east',label:'I-694',sub:'East (I-35W→I-94 Woodbury)',full:'I-694 East Leg',
+   coords:[[93.268,45.065],[93.228,45.052],[93.188,45.033],[93.152,45.015],[93.112,44.998],[93.078,44.975],[93.048,44.952],[93.015,44.928],[92.982,44.904]],
+   w:5,base:62,eq:'Ka 34.7 GHz, LIDAR',hot:'Weekday PM rush; Fri/Sat',
+   notes:'I-35E junction and Rice St/White Bear Ave area elevated. Volume rises near I-35E north.',
+   shift:{day:1.0,eve:1.15,night:0.70},mode:{1:1.0,2:1.28,3:1.62,4:1.95},pleas:{cfd:63,nonmov:20,contest:17},
+   v1:'Some Ka false alerts in residential areas. Trust strong alerts, verify weak ones.',
+   waze:'Active community in Maplewood/Roseville. Rice St bridge frequently reported.'},
+
+  {id:'i394',label:'I-394',sub:'Plymouth→Minneapolis',full:'I-394 (Plymouth to I-94)',
+   coords:[[93.558,44.962],[93.515,44.964],[93.470,44.967],[93.428,44.970],[93.388,44.972],[93.348,44.973],[93.315,44.973],[93.290,44.973]],
+   w:4,base:55,eq:'Ka 34.7 GHz, K-band, LIDAR',hot:'Weekday 7–9 AM inbound, 4–7 PM outbound',
+   notes:'Heavy AM inbound / PM outbound. HOV/MnPASS lanes. Enforcement notable at Plymouth exits.',
+   shift:{day:1.15,eve:1.12,night:0.58},mode:{1:1.0,2:1.20,3:1.50,4:1.80},pleas:{cfd:65,nonmov:22,contest:13},
+   v1:'HOV lane sensors generate K-band. Good sightlines Plymouth→Hwy 169.',
+   waze:'Check County Rd 73 and Hwy 100 overpass areas for patrol.'},
+
+  {id:'hwy100',label:'Hwy 100',sub:'Golden Valley/Bloomington (N-S)',full:'Hwy 100 North-South Corridor',
+   coords:[[93.385,45.055],[93.385,45.025],[93.384,44.998],[93.382,44.972],[93.380,44.950],[93.379,44.928],[93.377,44.905],[93.374,44.880],[93.372,44.855]],
+   w:4,base:45,eq:'Ka 34.7 GHz, K-band',hot:'Weekday rush hours',
+   notes:'Moderate enforcement. Near I-394 junction sees more patrol. Commercial corridor.',
+   shift:{day:1.05,eve:1.05,night:0.58},mode:{1:1.0,2:1.18,3:1.45,4:1.75},pleas:{cfd:68,nonmov:20,contest:12},
+   v1:'Commercial zone Ka false alerts common. Strong alerts near overpasses worth action.',
+   waze:'Light reporting — be your own lookout here.'},
+
+  {id:'hwy36',label:'Hwy 36',sub:'Stillwater→Roseville→St Louis Park',full:'Hwy 36 East-West Corridor',
+   coords:[[93.562,45.005],[93.510,45.002],[93.460,44.999],[93.410,44.998],[93.360,44.999],[93.310,45.000],[93.260,45.002],[93.210,45.002],[93.165,45.002],[93.115,45.003],[93.068,45.002],[93.022,44.999]],
+   w:4,base:50,eq:'Ka 34.7 GHz, LIDAR',hot:'Weekday AM/PM; Sat morning',
+   notes:'Growing enforcement. I-35E/Hwy 36 junction active. Lexington Ave area common patrol point.',
+   shift:{day:1.05,eve:1.0,night:0.58},mode:{1:1.0,2:1.20,3:1.50,4:1.78},pleas:{cfd:67,nonmov:20,contest:13},
+   v1:'Good V1 range on suburban corridor. Watch for patrol near major cross streets.',
+   waze:'Check near Lexington Ave and Rice St intersections.'},
+
+  {id:'us169',label:'US-169',sub:'Eden Prairie→Brooklyn Park',full:'US-169 North-South Corridor',
+   coords:[[93.462,45.095],[93.460,45.065],[93.458,45.038],[93.455,45.010],[93.452,44.982],[93.450,44.955],[93.448,44.928],[93.445,44.900],[93.443,44.870],[93.440,44.842],[93.438,44.815]],
+   w:4,base:38,eq:'Ka 34.7 GHz, K-band',hot:'Weekday AM/PM rush',
+   notes:'Lower enforcement density. I-494 junction active. Speed limit varies.',
+   shift:{day:1.0,eve:1.0,night:0.52},mode:{1:1.0,2:1.15,3:1.40,4:1.70},pleas:{cfd:70,nonmov:20,contest:10},
+   v1:'Open terrain; excellent V1 range. Fewer false alerts.',
+   waze:'Sparse reports — primary attention at I-494 and I-394 junctions.'},
+
+  {id:'us61',label:'US-61',sub:'St Paul→Woodbury (N-S)',full:'US-61 North-South Corridor',
+   coords:[[93.042,45.068],[93.040,45.040],[93.038,45.012],[93.036,44.984],[93.034,44.958],[93.032,44.930],[93.028,44.900],[93.025,44.870]],
+   w:4,base:42,eq:'Ka 34.7 GHz, LIDAR',hot:'Weekends; Fri evening',
+   notes:'Steady but lower-frequency enforcement. Lake Elmo patrol area.',
+   shift:{day:1.0,eve:1.05,night:0.58},mode:{1:1.0,2:1.18,3:1.45,4:1.75},pleas:{cfd:68,nonmov:20,contest:12},
+   v1:'Low false-alert environment east of StP.',
+   waze:'Check near I-694/I-94 east junction.'},
+
+  {id:'hwy77',label:'Hwy 77',sub:'Cedar Ave (Mpls→Apple Valley)',full:'Hwy 77 / Cedar Ave Corridor',
+   coords:[[93.243,44.995],[93.240,44.975],[93.237,44.952],[93.233,44.928],[93.229,44.905],[93.225,44.880],[93.222,44.857],[93.220,44.832],[93.218,44.808]],
+   w:4,base:44,eq:'Ka 34.7 GHz, K-band',hot:'Weekday AM/PM rush; Fri',
+   notes:'Speed limit drops near residential areas. I-494 crossing and Apple Valley enforcement active.',
+   shift:{day:1.0,eve:1.10,night:0.62},mode:{1:1.0,2:1.18,3:1.45,4:1.75},pleas:{cfd:67,nonmov:20,contest:13},
+   v1:'MoA / Best Buy area generates Ka false alerts near/south of I-494.',
+   waze:'Check near I-494 and Burnsville Pkwy crossings.'},
+
+  {id:'hwy13',label:'Hwy 13',sub:'Savage/Burnsville (E-W)',full:'Hwy 13 East-West Corridor',
+   coords:[[93.220,44.875],[93.252,44.860],[93.282,44.848],[93.312,44.837],[93.340,44.826],[93.368,44.820],[93.396,44.818],[93.422,44.818]],
+   w:3,base:32,eq:'Ka 34.7 GHz',hot:'Weekends',
+   notes:'Lower enforcement. Patrol occasional. County jurisdiction crossover possible.',
+   shift:{day:1.0,eve:0.95,night:0.48},mode:{1:1.0,2:1.10,3:1.35,4:1.65},pleas:{cfd:72,nonmov:18,contest:10},
+   v1:'Light false-alert environment. Good open road for V1.',
+   waze:'Minimal reports — trust your own awareness.'}
+];
+
+const hotspots=[
+  {lon:93.117,lat:44.920,label:'I-35E / West 7th St',note:'Trooper on West 7th ramp overpass using LIDAR targeting SB. Highly active Fri/Sat PM. One of top 5 citation locations in metro.'},
+  {lon:93.124,lat:44.905,label:'I-35E / Shepard Rd',note:'Motorcycle DragonEye LIDAR on Shepard Rd overpass. Targets SB in curve — V1 may not alert until you pass.'},
+  {lon:93.134,lat:44.892,label:'I-35E / Kellogg Blvd',note:'Right shoulder before Kellogg exit. Ka instant-on. High citation volume. Winding terrain hides patrol.'},
+  {lon:93.170,lat:44.955,label:'I-94 / Cretin Ave StP',note:'Overpass median patrol. Ka instant-on targeting EB and WB. Highest trooper density point on I-94 StP 45mph zone.'},
+  {lon:93.155,lat:44.952,label:'I-94 / Hamline–Lexington',note:'Shoulder patrol. Targets vehicles accelerating past the 45 mph zone limit.'},
+  {lon:93.130,lat:44.953,label:'I-94 / Dale St',note:'Near Dale St ramp. Frequently cited by Waze community. PM peak enforcement.'},
+  {lon:93.268,lat:44.875,label:'I-35W / American Blvd',note:'Bridge overpass. Ka instant-on targeting left-lane speeders. Second-most-cited I-35W location.'},
+  {lon:93.269,lat:44.858,label:'I-35W near I-494 S',note:'Shoulder before I-494 interchange. High citation density. Both directions targeted.'},
+  {lon:93.267,lat:44.922,label:'I-35W / 46th St',note:'Wide median patrol spot. LIDAR + Ka. Common morning enforcement target.'},
+  {lon:93.244,lat:44.857,label:'I-494 / Nicollet Ave',note:'Shoulder or ramp overpass near Nicollet. Airport corridor — both directions. Active Fri/Sat.'},
+  {lon:93.228,lat:44.858,label:'I-494 / Cedar Ave / MoA',note:'Near Mall of America. Ka patrol from shoulder. Very active Fri/Sat and holidays.'},
+  {lon:93.300,lat:44.843,label:'I-494 between Hwy 100 & Portland',note:'Between Hwy 100 and Portland Ave. Evening enforcement especially common.'},
+  {lon:93.450,lat:44.840,label:'I-494 / Hwy 169',note:'Tech corridor. Ka instant-on from overpass. Weekday PM enforcement.'},
+  {lon:93.112,lat:44.993,label:'I-694 / Rice St',note:'Bridge overpass with sightline both directions. Very frequent Waze reports here.'},
+  {lon:93.030,lat:44.920,label:'I-694 / White Bear Ave',note:'Right shoulder. Suburban corridor, regular patrol rotation.'},
+  {lon:93.352,lat:45.068,label:'I-694 / Brooklyn Blvd',note:'Median overpass. Clocks both WB and EB. Brooklyn Park sector.'},
+  {lon:93.262,lat:44.972,label:'I-94/I-35W Interchange',note:'Very high vehicle density. Ka instant-on from ramps. All shifts active.'},
+  {lon:93.155,lat:45.002,label:'Hwy 36 / Lexington Ave',note:'Common patrol pullout. Lexington Ave overpass with good sightlines. Roseville sector.'},
+  {lon:93.104,lat:45.022,label:'I-35E N / County Rd B',note:'Ramp and shoulder. Targets commuters NB approaching I-694.'},
+  {lon:93.034,lat:44.958,label:'US-61 / I-694 Jct',note:'Woodbury transition. Patrol watches speed before/after merge with I-94.'},
+  {lon:93.025,lat:44.912,label:'I-94 E / Geneva Ave',note:'Woodbury. Shoulder patrol targeting WB morning rush.'}
+];
+
+const cameras=[
+  {lon:93.274,lat:44.985,label:'Camera: 3rd St N / 1st Ave N',note:'Downtown Minneapolis. NovoaGlobal. $40 first / $80 repeat. No license points. Active 24/7. Mailed citation — no insurance impact during pilot.'},
+  {lon:93.298,lat:44.998,label:'Camera: Fremont Ave N / W Broadway',note:'Near North. $40/$80 fine. No points. School proximity zone. NOT detectable by V1 or any radar detector.'},
+  {lon:93.245,lat:44.995,label:'Camera: 18th Ave NE / Central Ave NE',note:'Northeast Minneapolis. Enforces 30 mph zone. Civil citation — contest by requesting calibration records.'},
+  {lon:93.259,lat:44.963,label:'Camera: Chicago Ave / Franklin Ave E',note:'Phillips neighborhood. 24/7. $40/$80 fine. No insurance impact during pilot. CFD option may apply.'},
+  {lon:93.281,lat:44.923,label:'Camera: Nicollet Ave / 46th St W',note:'South Minneapolis. Residential zone. NOT detectable. CFD possible; calibration challenge for contest.'}
+];
+
+const stations=[
+  {lon:93.368,lat:44.992,label:'West Metro HQ',sub:'District 2500 · Golden Valley · 74 troopers',type:'hq'},
+  {lon:93.002,lat:44.972,label:'East Metro HQ',sub:'District 2400 · Oakdale · 66 troopers',type:'hq'},
+  {lon:93.155,lat:45.013,label:'Roseville Station',sub:'Future HQ 2027 · currently substation',type:'sub'},
+  {lon:93.270,lat:44.792,label:'Burnsville Post',sub:'South Metro / I-35W south sector',type:'sub'},
+  {lon:93.190,lat:44.820,label:'Eagan Post',sub:'Airport / I-494 east sector',type:'sub'}
+];
+
+const mississippi=[[93.148,45.115],[93.138,45.090],[93.152,45.070],[93.172,45.052],[93.195,45.040],[93.212,45.028],[93.220,45.010],[93.228,44.990],[93.220,44.970],[93.210,44.950],[93.205,44.930],[93.200,44.910],[93.198,44.890],[93.202,44.870],[93.208,44.850],[93.205,44.830],[93.195,44.808]];
+const lakes=[
+  {pts:[[93.578,44.940],[93.558,44.942],[93.540,44.935],[93.522,44.928],[93.505,44.932],[93.495,44.940],[93.510,44.952],[93.535,44.958],[93.556,44.955],[93.572,44.947],[93.578,44.940]]},
+  {pts:[[93.073,44.978],[93.064,44.975],[93.059,44.980],[93.065,44.986],[93.074,44.986],[93.079,44.980],[93.073,44.978]]},
+  {pts:[[93.015,45.076],[92.998,45.068],[92.989,45.073],[92.995,45.086],[93.010,45.092],[93.023,45.083],[93.015,45.076]]}
+];
+
+function riskColor(s){return s<30?'#3fb950':s<55?'#d29922':s<75?'#e3661a':'#f85149';}
+function riskLabel(s){return s<30?'LOW':s<55?'MODERATE':s<75?'ELEVATED':'HIGH';}
+function adjScore(seg){const sm={all:1.0,day:seg.shift.day,eve:seg.shift.eve,night:seg.shift.night}[curShift]||1.0;return Math.min(99,Math.round(seg.base*sm*(seg.mode[curMode]||1.0)));}
+
+const NS='http://www.w3.org/2000/svg';
+function svgEl(tag,attrs,parent){const e=document.createElementNS(NS,tag);for(const[k,v]of Object.entries(attrs))e.setAttribute(k,v);if(parent)parent.appendChild(e);return e;}
+function ptsStr(coords){return coords.map(([lon,lat])=>{const[x,y]=px(lon,lat);return`${x.toFixed(1)},${y.toFixed(1)}`;}).join(' ');}
+
+const svg=document.getElementById('svg-map');
+svgEl('rect',{x:0,y:0,width:900,height:580,fill:'#0d1117'},svg);
+const gLake=svgEl('g',{},svg),gRiver=svgEl('g',{},svg),gCity=svgEl('g',{},svg);
+const gRoad=svgEl('g',{},svg),gLabel=svgEl('g',{},svg),gStn=svgEl('g',{},svg);
+const gCam=svgEl('g',{},svg),gHot=svgEl('g',{},svg);
+
+lakes.forEach(lk=>svgEl('polygon',{points:ptsStr(lk.pts),fill:'#1a3a5c44',stroke:'#1e4a7066','stroke-width':1},gLake));
+svgEl('polyline',{points:ptsStr(mississippi),fill:'none',stroke:'#1e4a7099','stroke-width':4,'stroke-linecap':'round','stroke-linejoin':'round'},gRiver);
+
+[{n:'Minneapolis',lon:93.270,lat:44.980},{n:'St Paul',lon:93.090,lat:44.942},{n:'Bloomington',lon:93.318,lat:44.840},
+ {n:'Eden Prairie',lon:93.468,lat:44.855},{n:'Eagan',lon:93.170,lat:44.815},{n:'Woodbury',lon:92.970,lat:44.900},
+ {n:'Roseville',lon:93.160,lat:45.028},{n:'Brooklyn Park',lon:93.375,lat:45.090},{n:'Burnsville',lon:93.280,lat:44.768},
+ {n:'Maplewood',lon:93.025,lat:44.952}].forEach(c=>{
+  const[x,y]=px(c.lon,c.lat);
+  svgEl('text',{x,y,fill:'#3d444d','font-size':9,'text-anchor':'middle','font-family':'-apple-system,sans-serif','pointer-events':'none'},gCity).textContent=c.n;
+});
+
+const roadEls={};
+segments.forEach(seg=>{
+  const s=adjScore(seg),col=riskColor(s);
+  svgEl('polyline',{points:ptsStr(seg.coords),fill:'none',stroke:'#0d1117','stroke-width':seg.w+3,'stroke-linecap':'round','stroke-linejoin':'round'},gRoad);
+  const line=svgEl('polyline',{points:ptsStr(seg.coords),fill:'none',stroke:col,'stroke-width':seg.w,'stroke-linecap':'round','stroke-linejoin':'round',class:'road','data-id':seg.id},gRoad);
+  line.addEventListener('click',()=>openSeg(seg));
+  roadEls[seg.id]=line;
+  const mid=seg.coords[Math.floor(seg.coords.length/2)];
+  const[mx,my]=px(mid[0],mid[1]);
+  svgEl('text',{x:mx,y:my-5,fill:'#6e7681','font-size':8,'text-anchor':'middle','font-family':'-apple-system,sans-serif','pointer-events':'none'},gLabel).textContent=seg.label;
+});
+
+stations.forEach(st=>{
+  const[x,y]=px(st.lon,st.lat);
+  const g=svgEl('g',{transform:`translate(${x.toFixed(1)},${y.toFixed(1)})`,cursor:'pointer'},gStn);
+  const r=st.type==='hq'?9:7;
+  svgEl('circle',{r,fill:'#0c4a6e',stroke:'#38bdf8','stroke-width':2},g);
+  svgEl('circle',{r:st.type==='hq'?4:3,fill:'#38bdf8'},g);
+  svgEl('text',{x:r+3,y:4,fill:'#38bdf8','font-size':8,'font-family':'-apple-system,sans-serif'},g).textContent=st.label;
+  g.addEventListener('click',()=>openStation(st));
+});
+
+cameras.forEach(cam=>{
+  const[x,y]=px(cam.lon,cam.lat);
+  const g=svgEl('g',{transform:`translate(${x.toFixed(1)},${y.toFixed(1)})`,cursor:'pointer'},gCam);
+  svgEl('rect',{x:-6,y:-6,width:12,height:12,rx:2,fill:'#4c1d95',stroke:'#a855f7','stroke-width':1.5},g);
+  svgEl('text',{x:0,y:4,fill:'#e9d5ff','font-size':8,'text-anchor':'middle','font-family':'sans-serif','font-weight':'bold'},g).textContent='⚡';
+  g.addEventListener('click',()=>openCamera(cam));
+});
+
+hotspots.forEach(hs=>{
+  const[x,y]=px(hs.lon,hs.lat);
+  const g=svgEl('g',{transform:`translate(${x.toFixed(1)},${y.toFixed(1)})`,cursor:'pointer'},gHot);
+  svgEl('circle',{r:5,fill:'#7c2d12',stroke:'#fb923c','stroke-width':1.5},g);
+  svgEl('circle',{r:2,fill:'#fb923c'},g);
+  g.addEventListener('click',()=>openHotspot(hs));
+});
+
+const detail=document.getElementById('detail'),dc=document.getElementById('detail-content');
+function openSeg(seg){
+  const s=adjScore(seg),col=riskColor(s),lbl=riskLabel(s);
+  dc.innerHTML=`<h2>${seg.full}</h2><div class="sub">${seg.sub}</div>
+  <div class="risk-bar-wrap"><div class="risk-bar-bg"><div class="risk-bar-fill" style="width:${s}%;background:${col}"></div></div>
+  <div class="risk-label risk-${lbl}">Risk: ${s}/100 — ${lbl}</div></div>
+  <div class="detail-row"><span class="k">Equipment</span><span class="v">${seg.eq}</span></div>
+  <div class="detail-row"><span class="k">Peak Times</span><span class="v">${seg.hot}</span></div>
+  <div class="detail-row"><span class="k">CFD Likelihood</span><span class="v">${seg.pleas.cfd}%</span></div>
+  <div class="detail-row"><span class="k">Non-Moving Plea</span><span class="v">${seg.pleas.nonmov}%</span></div>
+  <div class="detail-row"><span class="k">Contest Chance</span><span class="v">${seg.pleas.contest}%</span></div>
+  <div class="detail-row"><span class="k">Notes</span><span class="v">${seg.notes}</span></div>
+  <div class="tip-box"><div class="tip-head">🎯 Valentine One (Gen1)</div>${seg.v1}</div>
+  <div class="tip-box"><div class="tip-head">🗺 Waze</div>${seg.waze}</div>
+  <div class="tip-box" style="background:#0d1a0d"><div class="tip-head" style="color:#3fb950">Shift ×</div>Day ×${seg.shift.day} | Eve ×${seg.shift.eve} | Night ×${seg.shift.night}</div>
+  <div class="tip-box" style="background:#0d0d1a"><div class="tip-head" style="color:#58a6ff">Speed Mode ×</div>+1–14: ×${seg.mode[1]} | +15–29: ×${seg.mode[2]} | +30–49: ×${seg.mode[3]} | +50: ×${seg.mode[4]}</div>`;
+  detail.classList.add('open');
+}
+function openHotspot(hs){
+  dc.innerHTML=`<h2>🚔 Trooper Hotspot</h2><div class="sub">${hs.label}</div>
+  <div style="background:#1a1000;border:1px solid #fb923c44;border-radius:5px;padding:9px;margin:8px 0;font-size:11px;color:#fed7aa;line-height:1.6">${hs.note}</div>
+  <div class="tip-box"><div class="tip-head">📋 Response</div>Monitor V1 approaching this area. Reduce speed proactively. Ka alert near here = lift immediately and verify speed.</div>
+  <div class="tip-box"><div class="tip-head">🗺 Waze</div>Confirm with Police Visible or hidden markers near this intersection before passing.</div>`;
+  detail.classList.add('open');
+}
+function openCamera(cam){
+  dc.innerHTML=`<h2>${cam.label}</h2><div class="sub">Minneapolis Automated Speed Camera</div>
+  <div style="background:#1a0a2a;border:1px solid #a855f744;border-radius:5px;padding:9px;margin:8px 0;font-size:11px;color:#e9d5ff;line-height:1.6">${cam.note}</div>
+  <div class="detail-row"><span class="k">Operator</span><span class="v">NovoaGlobal Inc.</span></div>
+  <div class="detail-row"><span class="k">1st offense</span><span class="v">$40 mailed fine</span></div>
+  <div class="detail-row"><span class="k">Repeat offense</span><span class="v">$80 mailed fine</span></div>
+  <div class="detail-row"><span class="k">License points</span><span class="v">None (pilot period)</span></div>
+  <div class="detail-row"><span class="k">Insurance impact</span><span class="v">None (pilot period)</span></div>
+  <div class="detail-row"><span class="k">Active since</span><span class="v">October 1, 2025</span></div>
+  <div class="tip-box" style="background:#1a0000"><div class="tip-head" style="color:#f85149">⚠️ Detector Warning</div>Speed cameras are NOT radar. V1 CANNOT detect them. Maintain posted speed regardless of detector status.</div>
+  <div class="tip-box"><div class="tip-head">📋 Plea Options</div>Civil citation — not criminal. CFD may apply. Contest by requesting calibration records. Low urgency: no points, no insurance impact.</div>`;
+  detail.classList.add('open');
+}
+function openStation(st){
+  const tr=st.label.includes('West')?74:st.label.includes('East')?66:'—';
+  dc.innerHTML=`<h2>🏢 ${st.label}</h2><div class="sub">${st.sub}</div>
+  <div class="detail-row"><span class="k">Type</span><span class="v">${st.type==='hq'?'District HQ':'Substation / Post'}</span></div>
+  <div class="detail-row"><span class="k">Troopers</span><span class="v">${tr}</span></div>
+  <div class="detail-row"><span class="k">Shifts</span><span class="v">Day 6a–4p · Eve 2p–12a · Night 10p–8a</span></div>
+  <div class="tip-box"><div class="tip-head">📋 Patrol Radius</div>Coverage density highest within 10-mile radius; decreases outward. Peak deployment: Eve > Day > Night.</div>
+  <div class="tip-box" style="background:#0d0d1a"><div class="tip-head" style="color:#58a6ff">Shift Change Windows</div>6–8 AM · 2–4 PM · 10 PM–12 AM = minimum patrol density (15–20 min gaps).</div>`;
+  detail.classList.add('open');
+}
+function closeDetail(){detail.classList.remove('open');}
+
+function setShift(s){
+  curShift=s;
+  document.querySelectorAll('#shift-btns .ctrl-btn').forEach(b=>b.classList.toggle('active',b.dataset.shift===s));
+  document.getElementById('cur-shift-name').textContent={all:'All Day',day:'Day 6a–4p',eve:'Eve 2p–12a',night:'Night 10p–8a'}[s];
+  updateRoads();
+}
+function setMode(m){
+  curMode=m;
+  document.querySelectorAll('#mode-btns .ctrl-btn').forEach(b=>b.classList.toggle('active',+b.dataset.mode===m));
+  updateRoads();
+}
+function updateRoads(){segments.forEach(seg=>{const e=roadEls[seg.id];if(e)e.setAttribute('stroke',riskColor(adjScore(seg)));});}
+
+const h=new Date().getHours();
+setShift(h>=6&&h<14?'day':h>=14&&h<22?'eve':'night');
+setMode(1);
+</script>
+</body>
+</html>

@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MN Speed Companion — MSP +50mi</title>
+<style>
+:root {
+  --bg:#0d1017; --s1:#161a26; --s2:#1e2233; --s3:#252b3d;
+  --border:#2a3050; --accent:#4f8ef7; --purple:#7c3aed;
+  --green:#22c55e; --yellow:#eab308; --orange:#f97316; --red:#ef4444;
+  --text:#e2e8f0; --muted:#6b7599; --radius:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:16px 12px 40px;}
+/* HEADER */
+.app-header{text-align:center;margin-bottom:20px;}
+.app-title{font-size:1.4rem;font-weight:800;background:linear-gradient(135deg,#4f8ef7,#7c3aed);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.app-sub{font-size:0.75rem;color:var(--muted);margin-top:3px;}
+/* TABS */
+.tabs{display:flex;gap:4px;background:var(--s1);border:1px solid var(--border);border-radius:var(--radius);padding:4px;margin-bottom:16px;overflow-x:auto;flex-wrap:nowrap;}
+.tab{flex-shrink:0;padding:7px 14px;border-radius:7px;font-size:0.75rem;font-weight:600;cursor:pointer;color:var(--muted);transition:all .2s;white-space:nowrap;}
+.tab:hover{color:var(--text);}
+.tab.active{background:var(--s3);color:var(--text);box-shadow:0 1px 6px rgba(0,0,0,.4);}
+/* PANELS */
+.panel{display:none;}.panel.active{display:block;}
+/* GRID */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
+@media(max-width:640px){.grid2,.grid3{grid-template-columns:1fr;}}
+.span2{grid-column:1/-1;}
+/* CARD */
+.card{background:var(--s1);border:1px solid var(--border);border-radius:var(--radius);padding:18px;}
+.card-title{font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:12px;}
+/* GAUGE */
+.gauge-wrap{position:relative;width:160px;height:80px;overflow:hidden;margin:0 auto;}
+.gauge-bg{width:160px;height:160px;border-radius:50%;background:conic-gradient(var(--green) 0 54deg,var(--yellow) 54deg 108deg,var(--orange) 108deg 162deg,var(--red) 162deg 180deg,transparent 180deg 360deg);position:absolute;top:0;left:0;}
+.gauge-inner{width:104px;height:104px;background:var(--s1);border-radius:50%;position:absolute;top:28px;left:28px;}
+.gauge-needle{width:2px;height:62px;background:#fff;position:absolute;bottom:0;left:79px;transform-origin:bottom center;transform:rotate(-90deg);transition:transform .8s cubic-bezier(.34,1.56,.64,1);border-radius:2px;}
+.gauge-needle::after{content:'';width:9px;height:9px;background:#fff;border-radius:50%;position:absolute;bottom:-4px;left:-4px;}
+.risk-lbl{font-size:1.5rem;font-weight:800;text-align:center;transition:color .4s;margin-top:6px;}
+.risk-sub{font-size:0.72rem;color:var(--muted);text-align:center;}
+/* FORM */
+.fg{margin-bottom:12px;}
+label{display:block;font-size:0.72rem;color:var(--muted);margin-bottom:4px;font-weight:500;}
+select,input[type=number]{width:100%;background:var(--s2);border:1px solid var(--border);border-radius:7px;color:var(--text);padding:7px 10px;font-size:0.82rem;appearance:none;outline:none;cursor:pointer;transition:border-color .2s;}
+select:hover,select:focus,input[type=number]:focus{border-color:var(--accent);}
+select option{background:#1e2233;}
+.btn{width:100%;padding:9px;border-radius:8px;border:1px solid var(--border);background:var(--s2);color:var(--accent);font-size:0.78rem;cursor:pointer;font-weight:600;transition:all .2s;margin-top:6px;}
+.btn:hover{border-color:var(--accent);background:var(--s3);}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent);}
+.btn-primary:hover{background:#3d7de8;border-color:#3d7de8;}
+/* CHIPS */
+.chip-row{display:flex;flex-wrap:wrap;gap:5px;}
+.chip{padding:4px 11px;border-radius:16px;font-size:0.72rem;font-weight:500;border:1px solid var(--border);background:var(--s2);cursor:pointer;transition:all .15s;user-select:none;}
+.chip:hover{border-color:var(--accent);}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+/* FACTOR BARS */
+.frow{display:flex;align-items:center;gap:8px;margin-bottom:9px;}
+.fname{width:106px;font-size:0.7rem;color:var(--muted);flex-shrink:0;}
+.fbar-wrap{flex:1;height:5px;background:var(--s2);border-radius:3px;overflow:hidden;}
+.fbar{height:100%;border-radius:3px;transition:width .6s,background .4s;}
+.fval{width:28px;text-align:right;font-size:0.68rem;color:var(--muted);flex-shrink:0;}
+/* ALERT BANNERS */
+.alert{padding:9px 12px;border-radius:7px;font-size:0.77rem;line-height:1.5;border-left:3px solid;display:none;margin-top:10px;}
+.alert.show{display:block;}
+.alert-r{background:rgba(239,68,68,.12);border-color:var(--red);color:#fca5a5;}
+.alert-o{background:rgba(249,115,22,.12);border-color:var(--orange);color:#fdba74;}
+.alert-y{background:rgba(234,179,8,.12);border-color:var(--yellow);color:#fde047;}
+.alert-g{background:rgba(34,197,94,.12);border-color:var(--green);color:#86efac;}
+/* HEAT TABLE */
+.ht{width:100%;border-collapse:collapse;font-size:0.68rem;}
+.ht th{color:var(--muted);font-weight:500;padding:3px 4px;text-align:center;}
+.ht td{padding:3px 4px;text-align:center;border-radius:3px;font-weight:600;font-size:0.65rem;}
+.h0{background:#192019;color:#3a6e3a;}.h1{background:#1e2b1a;color:#5fa35f;}
+.h2{background:#28270f;color:#b8a620;}.h3{background:#2b2010;color:#e08020;}
+.h4{background:#2b1515;color:#e04040;}
+/* MONTH CALENDAR */
+.mcal{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;font-size:0.67rem;}
+.mcal-hdr{text-align:center;color:var(--muted);font-weight:600;padding:2px 0;}
+.mday{border-radius:4px;padding:4px 2px;text-align:center;font-weight:600;line-height:1.3;}
+/* CORRIDOR TABLE */
+.rtable{width:100%;border-collapse:collapse;font-size:0.76rem;}
+.rtable th{color:var(--muted);font-weight:600;text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);}
+.rtable td{padding:6px 8px;border-bottom:1px solid rgba(42,48,80,.5);vertical-align:top;}
+.rtable tr:last-child td{border-bottom:none;}
+.tag{display:inline-block;padding:2px 7px;border-radius:4px;font-size:0.64rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin:1px;}
+.tag-r{background:rgba(239,68,68,.2);color:#fca5a5;}
+.tag-o{background:rgba(249,115,22,.2);color:#fdba74;}
+.tag-y{background:rgba(234,179,8,.2);color:#fde047;}
+.tag-g{background:rgba(34,197,94,.2);color:#86efac;}
+.tag-b{background:rgba(79,142,247,.2);color:#93c5fd;}
+.tag-p{background:rgba(124,58,237,.2);color:#c4b5fd;}
+/* PLEA */
+.plea-card{background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:10px;}
+.plea-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.plea-name{font-size:0.88rem;font-weight:700;}
+.prob-badge{padding:3px 10px;border-radius:12px;font-size:0.72rem;font-weight:700;}
+.prob-hi{background:rgba(34,197,94,.2);color:#86efac;}
+.prob-med{background:rgba(234,179,8,.2);color:#fde047;}
+.prob-lo{background:rgba(249,115,22,.2);color:#fdba74;}
+.prob-vlo{background:rgba(239,68,68,.2);color:#fca5a5;}
+.plea-meta{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;}
+.plea-desc{font-size:0.78rem;color:var(--muted);line-height:1.55;}
+.plea-steps{margin-top:8px;}
+.plea-steps li{font-size:0.76rem;color:var(--muted);margin-left:16px;margin-bottom:3px;line-height:1.5;}
+/* PROB METER */
+.prob-bar{height:8px;background:var(--s3);border-radius:4px;overflow:hidden;margin-top:6px;}
+.prob-fill{height:100%;border-radius:4px;transition:width .6s;}
+/* DIVIDER */
+hr{border:none;border-top:1px solid var(--border);margin:14px 0;}
+/* TIP LIST */
+.tip{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);font-size:0.8rem;line-height:1.55;}
+.tip:last-child{border-bottom:none;}
+.tip-ico{font-size:1rem;flex-shrink:0;margin-top:1px;}
+/* FINE DISPLAY */
+.fine-big{font-size:2rem;font-weight:800;color:var(--accent);}
+.fine-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:0.82rem;}
+.fine-row:last-child{border-bottom:none;font-weight:700;font-size:0.88rem;}
+/* SCRIPT BOX */
+.script-box{background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:0.8rem;line-height:1.6;font-style:italic;color:#c7d0e8;position:relative;}
+.script-label{font-style:normal;font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:6px;}
+/* SECTION HEAD */
+.sec-h{font-size:0.82rem;font-weight:700;margin:14px 0 8px;}
+/* BADGE ROW */
+.badge-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
+/* SCROLL HINT */
+.scroll-hint{font-size:0.65rem;color:var(--muted);text-align:center;margin-bottom:8px;}
+/* LINKS */
+a{color:var(--accent);text-decoration:none;}a:hover{text-decoration:underline;}
+.footer{text-align:center;color:var(--muted);font-size:0.65rem;margin-top:28px;}
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <div class="app-title">🚗 MN Speed Companion</div>
+  <div class="app-sub">MSP Metro +50mi · Historical Data · Plea Calculator · V1 + Waze Intel</div>
+</div>
+
+<div class="tabs" id="tabBar">
+  <div class="tab active" onclick="showTab('risk',this)">🎯 Risk Meter</div>
+  <div class="tab" onclick="showTab('corridors',this)">🗺️ MN Corridors</div>
+  <div class="tab" onclick="showTab('detect',this)">📡 Detection</div>
+  <div class="tab" onclick="showTab('plea',this)">⚖️ Plea Calc</div>
+  <div class="tab" onclick="showTab('fines',this)">💰 Fines</div>
+  <div class="tab" onclick="showTab('stop',this)">🗣️ At the Stop</div>
+</div>
+
+<!-- ═══════════════════════════════════ RISK METER ═══════════════════════════════════ -->
+<div class="panel active" id="panel-risk">
+<div class="grid2">
+
+  <div class="card">
+    <div class="card-title">Enforcement Risk Level</div>
+    <div class="gauge-wrap"><div class="gauge-bg"></div><div class="gauge-inner"></div><div class="gauge-needle" id="needle"></div></div>
+    <div class="risk-lbl" id="rLbl">–</div>
+    <div class="risk-sub" id="rSub">Set conditions →</div>
+    <div class="risk-sub" id="rScore" style="margin-top:4px;font-size:0.68rem;"></div>
+    <hr>
+    <div class="card-title">Factor Breakdown</div>
+    <div id="factorBars"></div>
+    <div class="alert" id="alertBox"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Your Conditions</div>
+    <div class="fg">
+      <label>Day of Week</label>
+      <select id="dow" onchange="recalc()">
+        <option value="mon">Monday ⚠️ (highest)</option>
+        <option value="tue">Tuesday</option>
+        <option value="wed">Wednesday</option>
+        <option value="thu">Thursday ✓ (lowest)</option>
+        <option value="fri">Friday ✓</option>
+        <option value="sat">Saturday</option>
+        <option value="sun">Sunday</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label>Day of Month</label>
+      <select id="dom" onchange="recalc()">
+        <option value="early">1–5th (Elevated)</option>
+        <option value="mid" selected>6–20th (Lowest)</option>
+        <option value="late">21–27th (Moderate)</option>
+        <option value="endmonth">28–31st ⚠️ (Highest — quota pressure)</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label>Time of Day</label>
+      <select id="tod" onchange="recalc()">
+        <option value="early_am">Early Morning 5–7am</option>
+        <option value="rush_am">Morning Rush 7–9am ⚠️</option>
+        <option value="mid_am">Mid Morning 9–10am ⚠️</option>
+        <option value="late_am">Late Morning 10–12pm</option>
+        <option value="noon">Noon–1pm</option>
+        <option value="pm1">Afternoon 1–3pm ⚠️</option>
+        <option value="pm3">Late Afternoon 3–5pm</option>
+        <option value="eve">Evening 5–9pm</option>
+        <option value="night">Night 9pm–Midnight ⚠️</option>
+        <option value="late_night">Late Night 12–5am</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label>Road / Zone Type</label>
+      <select id="road" onchange="recalc()">
+        <option value="residential">Residential Street</option>
+        <option value="arterial">Arterial / Main Road</option>
+        <option value="hwy">State Highway (169, 61, 10…)</option>
+        <option value="interstate">Interstate (I-94/35/494/694)</option>
+        <option value="i35e">I-35E St. Paul 45mph zone 🔴</option>
+        <option value="school">School Zone 🚸</option>
+        <option value="construction">Construction Zone 🚧</option>
+        <option value="rural">Rural Road</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label>Special Conditions</label>
+      <div class="chip-row" id="specChips">
+        <div class="chip" data-k="holiday" onclick="toggleChip(this)">Holiday MEP</div>
+        <div class="chip" data-k="summer" onclick="toggleChip(this)">100 Deadliest Days</div>
+        <div class="chip" data-k="endq" onclick="toggleChip(this)">End of Quarter</div>
+        <div class="chip" data-k="school_hr" onclick="toggleChip(this)">School Hours</div>
+        <div class="chip" data-k="aircraft" onclick="toggleChip(this)">Aircraft Patrol</div>
+        <div class="chip" data-k="trap" onclick="toggleChip(this)">Known Trap</div>
+        <div class="chip" data-k="mpls_cam" onclick="toggleChip(this)">Mpls Speed Camera</div>
+      </div>
+    </div>
+    <button class="btn" onclick="useNow()">📍 Use Current Day &amp; Time</button>
+  </div>
+
+  <!-- Heat table -->
+  <div class="card">
+    <div class="card-title">Enforcement Heat Map — Time × Day of Week</div>
+    <table class="ht"><thead><tr><th></th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th></tr></thead>
+    <tbody id="heatBody"></tbody></table>
+  </div>
+
+  <!-- Month calendar -->
+  <div class="card">
+    <div class="card-title">Monthly Risk by Day of Month</div>
+    <div class="mcal" id="mcal"></div>
+    <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;">
+      <span style="font-size:0.68rem;color:var(--muted);">▬ <span style="color:#86efac">Low</span> &nbsp; ▬ <span style="color:#fde047">Moderate</span> &nbsp; ▬ <span style="color:#fca5a5">High</span></span>
+    </div>
+    <div style="margin-top:10px;font-size:0.72rem;color:var(--muted);line-height:1.6;">
+      <strong style="color:var(--text)">MN note:</strong> End-of-month effect is well-documented statewide. The 28th–31st statistically see 2× citations vs. mid-month. The 1st–5th also elevated as the new period opens.
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════════ CORRIDORS ═══════════════════════════════════ -->
+<div class="panel" id="panel-corridors">
+<div class="card" style="margin-bottom:14px;">
+  <div class="card-title">Twin Cities Metro + 50mi — Key Enforcement Corridors</div>
+  <table class="rtable">
+    <thead><tr><th>Route</th><th>Limit</th><th>Risk</th><th>Enforcement Profile</th><th>Watch For</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>I-35E (St. Paul)</strong></td>
+        <td>45 mph<br><span style="font-size:0.65rem;color:var(--muted)">unusual for interstate</span></td>
+        <td><span class="tag tag-r">HIGHEST</span></td>
+        <td>Ka instant-on from bridges/ramps; speed cameras planned; 45mph catches visitors off guard</td>
+        <td>Limit drops suddenly near downtown. Don't match I-94 pace here.</td>
+      </tr>
+      <tr>
+        <td><strong>I-94 (Mpls–St. Paul corridor)</strong></td>
+        <td>55 mph<br><span style="font-size:0.65rem;color:var(--muted)">downtown</span></td>
+        <td><span class="tag tag-r">HIGH</span></td>
+        <td>Aircraft enforcement noted; "SPEED ENFORCED BY AIRCRAFT" signs; unmarked Ka I/O; MSP troopers blend with traffic</td>
+        <td>Aircraft can clock you between painted highway markers — invisible, V1 blind</td>
+      </tr>
+      <tr>
+        <td><strong>I-494 / I-694 Beltway</strong></td>
+        <td>65 mph</td>
+        <td><span class="tag tag-o">HIGH</span></td>
+        <td>Primary MSP patrol zone; Ka 34.7 GHz instant-on; motorcycle units with DragonEye LIDAR</td>
+        <td>Motorcycle cops emerge from ramps; LIDAR gives zero advance warning</td>
+      </tr>
+      <tr>
+        <td><strong>I-35W / I-35E (south suburbs)</strong></td>
+        <td>65–70 mph</td>
+        <td><span class="tag tag-o">ELEVATED</span></td>
+        <td>K and Ka band; VASCAR aircraft on rural sections south of metro</td>
+        <td>Speed rises to 70 mph south of Burnsville; enforcement picks back up near Faribault</td>
+      </tr>
+      <tr>
+        <td><strong>US-169 (metro)</strong></td>
+        <td>55 mph<br><span style="font-size:0.65rem;color:var(--muted)">Eden Prairie–Plymouth</span></td>
+        <td><span class="tag tag-o">ELEVATED</span></td>
+        <td>Suburban PD + Hennepin County Sheriff; radar from overpasses</td>
+        <td>55 mph limit often ignored by traffic flow — enforcement targets outliers</td>
+      </tr>
+      <tr>
+        <td><strong>US-61 (River Road)</strong></td>
+        <td>65 mph</td>
+        <td><span class="tag tag-y">MODERATE</span></td>
+        <td>Washington County Sheriff; scenic corridor, tourism police activity</td>
+        <td>Speed drops in Hastings, Red Wing; school zones en route</td>
+      </tr>
+      <tr>
+        <td><strong>Hwy 36 (North suburbs)</strong></td>
+        <td>55 mph</td>
+        <td><span class="tag tag-y">MODERATE</span></td>
+        <td>Ramsey Co. + Maplewood, Roseville PD; radar from parking lots</td>
+        <td>Limit drops near White Bear Lake; heavy construction activity</td>
+      </tr>
+      <tr>
+        <td><strong>Downtown Mpls grid</strong></td>
+        <td>25–30 mph</td>
+        <td><span class="tag tag-r">HIGHEST</span></td>
+        <td><strong>Automated speed cameras active since Oct 2025 — 5 pilot locations.</strong> No officer needed, tickets mailed. School zone doubled fines.</td>
+        <td>Camera locations not published — treat all of downtown as enforced. Fines by mail, no warning.</td>
+      </tr>
+      <tr>
+        <td><strong>School Zones (metro-wide)</strong></td>
+        <td>20–30 mph</td>
+        <td><span class="tag tag-r">HIGHEST</span></td>
+        <td>Automated cameras; patrol officers; zero tolerance 7–9am &amp; 2–4pm school days</td>
+        <td>Fines doubled by statute. No equipment defense for camera tickets.</td>
+      </tr>
+      <tr>
+        <td><strong>Rural I-90 / I-35 (50mi+)</strong></td>
+        <td>70 mph</td>
+        <td><span class="tag tag-y">MODERATE</span></td>
+        <td>VASCAR aircraft on straightaways; rare but lethal for high-speed drivers; MSP unmarked</td>
+        <td>Aircraft patrols use painted distance markers on road. Legal to do 75–80 in traffic, but 85+ invites license revocation.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="grid2">
+  <div class="card">
+    <div class="card-title">Minneapolis Automated Speed Camera Pilot</div>
+    <div class="badge-row"><span class="tag tag-r">ACTIVE</span><span class="tag tag-b">Since Oct 1, 2025</span><span class="tag tag-p">Pilot to July 2029</span></div>
+    <div class="tip"><div class="tip-ico">📷</div><div>5 camera locations active in Minneapolis. Cameras issue citations by mail — no police interaction, no warning. Fines apply to registered owner.</div></div>
+    <div class="tip"><div class="tip-ico">🚸</div><div>School zones are the primary targets. Cameras operate independently of officer staffing — V1, Waze, and radar detectors are <strong>completely blind</strong> to them.</div></div>
+    <div class="tip"><div class="tip-ico">📬</div><div>Citations mailed to registered owner within 30 days. First offense in pilot: $40–$100. Cannot be dismissed at roadside — must be contested in writing.</div></div>
+    <div class="tip"><div class="tip-ico">🔗</div><div>Official program: <a href="https://www.minneapolismn.gov/government/programs-initiatives/visionzero/actions-taken/traffic-safety-camera/" target="_blank">Minneapolis Vision Zero →</a></div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">MCRO — Court Records for Ticket Patterns</div>
+    <div class="tip"><div class="tip-ico">🔍</div><div><strong><a href="https://publicaccess.courts.state.mn.us/CaseSearch" target="_blank">MN Court Records Online (MCRO)</a></strong> — search by officer name or location to see citation history, patterns, and outcomes.</div></div>
+    <div class="tip"><div class="tip-ico">📋</div><div>Search by: Citation Number, Case Number, Officer Name, or Party Name. Petty misdemeanor traffic cases are public record.</div></div>
+    <div class="tip"><div class="tip-ico">💡</div><div>Look up the issuing officer. Some officers have high dismissal rates in contested cases; others have perfect records. Knowing this before your hearing matters.</div></div>
+    <div class="tip"><div class="tip-ico">📂</div><div>Request discovery: officer notes, radar calibration logs, body cam footage, dash cam, and training records via written request before your hearing date.</div></div>
+    <div class="tip"><div class="tip-ico">🏛️</div><div>Hennepin violations bureau: <a href="https://mncourts.gov/find-courts/hennepin/hennepinviolationsbureauandhearingoffice" target="_blank">mncourts.gov →</a> &nbsp;|&nbsp; Ramsey: Second District Court</div></div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════ DETECTION ═══════════════════════════════════ -->
+<div class="panel" id="panel-detect">
+<div class="grid2">
+
+  <div class="card">
+    <div class="card-title">Valentine One — MN State Patrol Threat Matrix</div>
+    <table class="rtable">
+      <thead><tr><th>Threat</th><th>V1 Detects?</th><th>MN Usage</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Ka 34.7 GHz (I/O)</strong></td><td><span class="tag tag-g">YES ✓</span></td><td>Primary — MSP troopers, Hennepin, Ramsey</td><td>Instant-on; need cars ahead to trigger. V1's strongest suit.</td></tr>
+        <tr><td><strong>K-band</strong></td><td><span class="tag tag-g">YES ✓</span></td><td>Secondary — some suburbs, rural counties</td><td>High false-positive from auto doors; use logic mode.</td></tr>
+        <tr><td><strong>X-band</strong></td><td><span class="tag tag-g">YES ✓</span></td><td>Rare — some older rural equipment</td><td>Very low usage in MN metro.</td></tr>
+        <tr><td><strong>DragonEye LIDAR</strong></td><td><span class="tag tag-y">PARTIAL ⚠️</span></td><td>Motorcycle units near Twin Cities</td><td>Older V1 units may not alert. If it does alert, you're already clocked.</td></tr>
+        <tr><td><strong>LTI TruSpeed S</strong></td><td><span class="tag tag-r">NO ✗</span></td><td>Some MN agencies</td><td>Confirmed V1 Gen2 does not detect this LIDAR model.</td></tr>
+        <tr><td><strong>VASCAR (Aircraft)</strong></td><td><span class="tag tag-r">NO ✗</span></td><td>I-94, I-35 rural stretches</td><td>Time/distance calculation — passive, no emissions. Invisible to all detectors.</td></tr>
+        <tr><td><strong>Pacing (unmarked)</strong></td><td><span class="tag tag-r">NO ✗</span></td><td>Unmarked cars, I-94 corridor</td><td>Officer matches speed, then clocks you visually. No countermeasure.</td></tr>
+        <tr><td><strong>Speed cameras (Mpls)</strong></td><td><span class="tag tag-r">NO ✗</span></td><td>Downtown Mpls — 5 locations</td><td>Fixed cameras, no radar. Ticket by mail. V1 is irrelevant.</td></tr>
+        <tr><td><strong>Flock Safety ALPR</strong></td><td><span class="tag tag-r">N/A</span></td><td>300+ units in metro</td><td>Not speed enforcement — plate reader only. See Flock section below.</td></tr>
+      </tbody>
+    </table>
+    <div class="alert alert-y show" style="margin-top:10px;">⚠️ Laser alert on any detector = already clocked. No advance warning is possible with LIDAR. The only counter is avoiding being targeted in the first place.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">V1 + Waze Optimal Setup — MN</div>
+    <div class="tip"><div class="tip-ico">📡</div><div><strong>V1 settings for MN metro:</strong> Enable Ka full, K reduced (high false-positives from auto doors). Disable X-band in city. Use Logic Mode if V1 Gen2.</div></div>
+    <div class="tip"><div class="tip-ico">📱</div><div><strong>Waze as laser trap spotter:</strong> Laser is always from a stationary position — Waze users mark these spots. Set Waze to "Alerts Only" mode and route your drive even if you know the route. Advance alert range: ¼–½ mile (but confirms stationary threat).</div></div>
+    <div class="tip"><div class="tip-ico">🔗</div><div><strong>V1 + Waze integration:</strong> Use <em>YaV1</em> or <em>V1Driver</em> Bluetooth app to run V1 signal + Waze audio on same device. Both apps filter K-band false alerts and annotate signal direction from V1's arrow display.</div></div>
+    <div class="tip"><div class="tip-ico">🏍️</div><div><strong>Motorcycle cop tell:</strong> DragonEye LIDAR is used by MN motorcycle units. They typically sit on entrance ramps or behind barriers. V1 may not alert. Waze + traffic ahead as proxy — slow cars ahead near a ramp = possible motorcycle unit.</div></div>
+    <div class="tip"><div class="tip-ico">✈️</div><div><strong>Aircraft stretches:</strong> I-94 westbound past Maple Grove, I-35 south of Lakeville. "SPEED ENFORCED BY AIRCRAFT" signs are legal warning. No detector helps. Fly at 5 over max with flow of traffic.</div></div>
+    <div class="tip"><div class="tip-ico">🚗</div><div><strong>Best passive protection:</strong> Stay behind a buffer of 4+ cars. Let faster drivers act as scouts. In the Twin Cities, the flow of traffic on interstates typically runs 72–77 mph — being the fastest car by >5 mph is the primary selection criteria for enforcement.</div></div>
+  </div>
+
+  <div class="card span2">
+    <div class="card-title">Flock Safety Cameras — What They Are (and Are Not)</div>
+    <div class="grid2" style="gap:14px;">
+      <div>
+        <div class="sec-h">What Flock cameras DO:</div>
+        <div class="tip"><div class="tip-ico">🔤</div><div>Read and log your license plate, timestamp, and location every time you pass. Data stored in searchable database accessible by all MN law enforcement agencies.</div></div>
+        <div class="tip"><div class="tip-ico">🚨</div><div>Automatically alert if your plate matches a stolen vehicle list, Amber Alert, or law enforcement lookout.</div></div>
+        <div class="tip"><div class="tip-ico">🔍</div><div>Log vehicle make, model, color, and distinguishing features (roof racks, stickers, etc.) using AI.</div></div>
+        <div class="tip"><div class="tip-ico">🕸️</div><div>300+ units in Twin Cities metro. Concentrated in: Wayzata, Eden Prairie, Plymouth, Minnetonka, Brooklyn Park, Edina, and near U of MN campus.</div></div>
+      </div>
+      <div>
+        <div class="sec-h">What Flock cameras DO NOT do:</div>
+        <div class="alert alert-g show"><strong>Flock cameras are NOT speed enforcement.</strong> They do not measure speed, cannot issue citations, and do not trigger police stops for speeding. No V1 or Waze countermeasure needed.</div>
+        <div class="tip" style="margin-top:10px;"><div class="tip-ico">❌</div><div>Do not record video or audio. Do not use facial recognition. Do not enforce parking or traffic signals.</div></div>
+        <div class="tip"><div class="tip-ico">⚠️</div><div><strong>Privacy note:</strong> MN legislature actively debating data retention limits (2026). Some suburbs (Brooklyn Park, Shorewood) have shut cameras off. Federal immigration use has prompted additional scrutiny.</div></div>
+        <div class="tip"><div class="tip-ico">🔗</div><div>U of MN transparency portal: <a href="https://transparency.flocksafety.com/university-of-minnesota-mn-pd-twin-cities" target="_blank">Flock Transparency →</a></div></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════════ PLEA CALCULATOR ═══════════════════════════════════ -->
+<div class="panel" id="panel-plea">
+<div class="grid2">
+  <div class="card">
+    <div class="card-title">Your Citation Profile</div>
+    <div class="fg">
+      <label>Miles over posted limit</label>
+      <select id="pl_mph" onchange="calcPlea()">
+        <option value="1">1–9 mph over</option>
+        <option value="10">10–19 mph over</option>
+        <option value="20">20–29 mph over</option>
+        <option value="30">30–39 mph over</option>
+        <option value="100">100+ mph (license revocation territory)</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label>Your driving record (past 3 years)</label>
+      <select id="pl_record" onchange="calcPlea()">
+        <option value="clean">Clean — zero violations</option>
+        <option value="one">One prior violation</option>
+        <option value="two">Two prior violations</option>
+        <option value="three">Three or more violations</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label>Location of citation</label>
+      <select id="pl_loc" onchange="calcPlea()">
+        <option value="standard">Standard road / highway</option>
+        <option value="school">School zone</option>
+        <option value="construction">Construction / work zone</option>
+        <option value="camera">Automated speed camera (Mpls)</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label>Detection method used by officer</label>
+      <select id="pl_method" onchange="calcPlea()">
+        <option value="radar">Radar (Ka/K-band)</option>
+        <option value="lidar">LIDAR / Laser (DragonEye etc.)</option>
+        <option value="pacing">Pacing (visual/following)</option>
+        <option value="vascar">VASCAR (aircraft)</option>
+        <option value="camera">Automated camera</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label>Additional factors</label>
+      <div class="chip-row" id="pleaChips">
+        <div class="chip" data-k="hired_atty" onclick="tPChip(this)">Hired attorney</div>
+        <div class="chip" data-k="officer_noshow" onclick="tPChip(this)">Officer no-show (bet)</div>
+        <div class="chip" data-k="no_calib" onclick="tPChip(this)">No calibration docs</div>
+        <div class="chip" data-k="emergency" onclick="tPChip(this)">Emergency defense</div>
+        <div class="chip" data-k="polite" onclick="tPChip(this)">Was polite at stop</div>
+        <div class="chip" data-k="dash_cam" onclick="tPChip(this)">Have dashcam footage</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Recommended Strategy</div>
+    <div id="stratBox">
+      <div style="color:var(--muted);font-size:0.8rem;">Set your citation details to see personalized strategy →</div>
+    </div>
+  </div>
+
+  <div class="card span2">
+    <div class="card-title">All Available Plea Options — Minnesota</div>
+    <div id="pleaOptions"></div>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════════ FINES ═══════════════════════════════════ -->
+<div class="panel" id="panel-fines">
+<div class="grid2">
+
+  <div class="card">
+    <div class="card-title">Fine Estimator</div>
+    <div class="fg">
+      <label>Miles over limit</label>
+      <select id="fi_mph" onchange="calcFine()">
+        <option value="5">1–5 mph over</option>
+        <option value="9">6–9 mph over</option>
+        <option value="14">10–14 mph over</option>
+        <option value="19">15–19 mph over</option>
+        <option value="25">20–29 mph over (fine doubled)</option>
+        <option value="35">30–39 mph over (fine doubled)</option>
+        <option value="100">100+ mph</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label>County</label>
+      <select id="fi_county" onchange="calcFine()">
+        <option value="hennepin">Hennepin</option>
+        <option value="ramsey">Ramsey</option>
+        <option value="other">Other MN county</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label>Zone modifier</label>
+      <select id="fi_zone" onchange="calcFine()">
+        <option value="standard">Standard road</option>
+        <option value="school">School zone (2× fine)</option>
+        <option value="construction">Work/construction zone ($300 min)</option>
+      </select>
+    </div>
+    <hr>
+    <div id="fineBreakdown"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">MN Fine Structure Reference</div>
+    <table class="rtable">
+      <thead><tr><th>Speed Over</th><th>Classification</th><th>Base Fine</th><th>License Impact</th></tr></thead>
+      <tbody>
+        <tr><td>1–9 mph</td><td><span class="tag tag-b">Petty Misd.</span></td><td>~$40–90</td><td>None (no MN point system)</td></tr>
+        <tr><td>10–19 mph</td><td><span class="tag tag-b">Petty Misd.</span></td><td>~$90–130</td><td>None</td></tr>
+        <tr><td>20–29 mph</td><td><span class="tag tag-o">Doubled Fine</span></td><td>~$200–260</td><td>None first offense</td></tr>
+        <tr><td>30+ mph</td><td><span class="tag tag-r">Petty Misd.+</span></td><td>~$260–300</td><td>Possible suspension</td></tr>
+        <tr><td>100+ mph</td><td><span class="tag tag-r">Misd. if endangers</span></td><td>$300–500</td><td>6-month revocation</td></tr>
+        <tr><td>3rd violation / 12 mo.</td><td><span class="tag tag-r">Misdemeanor</span></td><td>Up to $1,000</td><td>Up to 90 days jail</td></tr>
+        <tr><td>School zone</td><td><span class="tag tag-r">2× Fine</span></td><td>Doubled</td><td>Elevated</td></tr>
+        <tr><td>Work zone</td><td><span class="tag tag-o">$300 min</span></td><td>$300+</td><td>None per se</td></tr>
+      </tbody>
+    </table>
+    <hr>
+    <div style="font-size:0.75rem;color:var(--muted);line-height:1.6;">
+      <strong style="color:var(--text)">Surcharges always added:</strong> Hennepin: +$75 court surcharge. Ramsey: +$76. All MN: law library fee ~$10.
+      <br><strong style="color:var(--text)">MN has no driver point system</strong> — but habitual violations (3+ in 12 months) trigger administrative license action regardless.
+      <br><strong style="color:var(--text)">Insurance impact:</strong> Any speeding conviction reported to DVS is visible to insurers at renewal. Continuance for Dismissal = no conviction = no DVS report.
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════════ AT THE STOP ═══════════════════════════════════ -->
+<div class="panel" id="panel-stop">
+<div class="grid2">
+
+  <div class="card">
+    <div class="card-title">The Stop — Optimal Script by Phase</div>
+
+    <div class="sec-h">⏹ Phase 1: Pulling Over</div>
+    <div class="script-box">
+      <div class="script-label">Action — not words:</div>
+      Signal immediately, pull to the right shoulder smoothly and completely. Hazard lights on. Engine off or in park. Hands visible on steering wheel before officer approaches. Do NOT reach for anything until asked.
+    </div>
+
+    <div class="sec-h" style="margin-top:14px;">🪟 Phase 2: First Contact</div>
+    <div class="script-box">
+      <div class="script-label">Say exactly:</div>
+      "Good [morning/afternoon/evening], officer." Then stop. Let them lead. Hand over license, registration, and proof of insurance when asked — not before. Keep hands visible during every reach.
+    </div>
+    <div class="alert alert-y show" style="margin-top:8px;">Do NOT say "I know why you pulled me over" or anything that admits speed. Silence is neutral. Admission is permanent.</div>
+
+    <div class="sec-h" style="margin-top:14px;">❓ Phase 3: "Do you know how fast you were going?"</div>
+    <div class="script-box">
+      <div class="script-label">Best response — non-committal and polite:</div>
+      "I'm sorry, I'm not certain. What did you have me at?"
+    </div>
+    <div class="tip" style="margin-top:6px;"><div class="tip-ico">💡</div><div>This is not lying — you genuinely may not know their exact reading. It keeps the record clean, invites them to state the measurement (which you'll need for court), and projects calm confidence.</div></div>
+
+    <div class="sec-h" style="margin-top:14px;">🚫 Phase 4: Never say these</div>
+    <div style="background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:0.78rem;">
+      <div style="margin-bottom:5px;color:#fca5a5;">❌ "I was just keeping up with traffic" — admission of speeding</div>
+      <div style="margin-bottom:5px;color:#fca5a5;">❌ "I was only going [X]" — you've now confirmed a speed</div>
+      <div style="margin-bottom:5px;color:#fca5a5;">❌ "Your radar must be wrong" — immediately antagonistic</div>
+      <div style="margin-bottom:5px;color:#fca5a5;">❌ "Can't you just give me a warning?" — rarely works, sounds entitled</div>
+      <div style="color:#fca5a5;">❌ "I'm late for [anything]" — not a legal defense, just context for a story</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Maximizing Outcome Probability at the Roadside</div>
+
+    <div class="tip"><div class="tip-ico">😌</div><div><strong>Project calm confidence.</strong> Officers write fewer tickets to people who are composed, cooperative, and professional. Nervousness can read as evasiveness; aggression kills any chance of a warning.</div></div>
+    <div class="tip"><div class="tip-ico">📝</div><div><strong>Note everything immediately after.</strong> Write down: time, location, officer's name and badge number, exact speed stated, direction of travel, weather, traffic conditions, what you were doing. This is your discovery foundation.</div></div>
+    <div class="tip"><div class="tip-ico">📷</div><div><strong>Dashcam silently helps.</strong> Footage can confirm road conditions, traffic flow (pacing defense), and your behavior at the stop. Don't mention it unless it helps you.</div></div>
+    <div class="tip"><div class="tip-ico">🤐</div><div><strong>Don't argue the law at the roadside.</strong> The officer cannot dismiss your ticket there. Any legal argument is wasted — and may be used against you. Save it for the hearing.</div></div>
+    <div class="tip"><div class="tip-ico">🙏</div><div><strong>The "please" moment:</strong> After accepting the citation politely, you can say: "Officer, I have a clean driving record and this was a lapse in judgment. Is there any chance this could be reduced?" — No worse than silence. Works occasionally, especially end-of-shift or not-end-of-month.</div></div>
+
+    <hr>
+    <div class="sec-h">If You Think the Stop Was Improper</div>
+    <div class="tip"><div class="tip-ico">⚖️</div><div><strong>Do NOT argue it at the scene.</strong> If the stop was unlawful (no probable cause), that's a suppression argument for court. Arguing it roadside accomplishes nothing except escalation.</div></div>
+    <div class="tip"><div class="tip-ico">🧾</div><div>Accept the citation, note your objection mentally, then consult an attorney. Fourth Amendment suppression (if the stop was pretextual or without cause) is a powerful defense that wins dismissals — but only in court.</div></div>
+
+    <hr>
+    <div class="sec-h">When You're in a Construction or School Zone</div>
+    <div class="tip"><div class="tip-ico">🚧</div><div>Doubled fines are mandatory — but polite behavior at the stop doesn't change the fine amount. Focus energy on contesting in court (calibration records, zone marking compliance) rather than roadside negotiation.</div></div>
+    <div class="tip"><div class="tip-ico">📣</div><div>For school zone automated camera citations: officer interaction is irrelevant — all contestation is by mail or in-person hearing. Note the exact date/time and whether school was actually in session.</div></div>
+  </div>
+
+  <div class="card span2">
+    <div class="card-title">Behavior → Outcome Probability Matrix</div>
+    <table class="rtable">
+      <thead><tr><th>Behavior at Stop</th><th>Warning Probability</th><th>Reduced Charge Probability</th><th>Full Ticket Probability</th></tr></thead>
+      <tbody>
+        <tr><td>Polite, calm, no admissions, clean record</td><td><span class="tag tag-g">15–25%</span></td><td><span class="tag tag-g">25–35%</span></td><td><span class="tag tag-y">40–60%</span></td></tr>
+        <tr><td>Polite + explicitly asks for consideration</td><td><span class="tag tag-g">20–30%</span></td><td><span class="tag tag-g">25–35%</span></td><td><span class="tag tag-y">40–55%</span></td></tr>
+        <tr><td>Neutral, cooperative, says little</td><td><span class="tag tag-y">8–15%</span></td><td><span class="tag tag-y">15–25%</span></td><td><span class="tag tag-o">60–75%</span></td></tr>
+        <tr><td>Admits speed ("I was just keeping up")</td><td><span class="tag tag-r">2–5%</span></td><td><span class="tag tag-r">5–10%</span></td><td><span class="tag tag-r">85–95%</span></td></tr>
+        <tr><td>Argues or disputes officer at scene</td><td><span class="tag tag-r">&lt;2%</span></td><td><span class="tag tag-r">&lt;5%</span></td><td><span class="tag tag-r">95%+</span></td></tr>
+        <tr><td>End-of-month stop, any behavior</td><td><span class="tag tag-r">&lt;5%</span></td><td><span class="tag tag-r">5–10%</span></td><td><span class="tag tag-r">85–95%</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════════ SCRIPTS ═══════════════════════════════════ -->
+
+<p class="footer">Informational only — based on publicly available MN statutes, enforcement data, and legal resources. Not legal advice. For contested citations consult a MN traffic attorney. Drive safely.</p>
+
+<script>
+// ─── TAB ROUTING ──────────────────────────────────────────
+function showTab(id, el) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('panel-' + id).classList.add('active');
+  el.classList.add('active');
+}
+
+// ─── RISK METER ───────────────────────────────────────────
+const activeSpec = new Set();
+function toggleChip(el) {
+  const k = el.dataset.k;
+  activeSpec.has(k) ? (activeSpec.delete(k), el.classList.remove('on')) : (activeSpec.add(k), el.classList.add('on'));
+  recalc();
+}
+const dowS = {mon:90,tue:78,wed:72,thu:38,fri:42,sat:68,sun:62};
+const domS = {early:73,mid:28,late:52,endmonth:96};
+const todS = {early_am:28,rush_am:92,mid_am:86,late_am:42,noon:48,pm1:82,pm3:52,eve:42,night:76,late_night:36};
+const roadS = {residential:58,arterial:63,hwy:68,interstate:65,i35e:95,school:97,construction:92,rural:42};
+const specS = {holiday:88,summer:72,endq:68,school_hr:82,aircraft:90,trap:92,mpls_cam:96};
+
+function recalc() {
+  const dow = dowS[document.getElementById('dow').value];
+  const dom = domS[document.getElementById('dom').value];
+  const tod = todS[document.getElementById('tod').value];
+  const road = roadS[document.getElementById('road').value];
+  let specAvg = 0;
+  if (activeSpec.size) { activeSpec.forEach(k => specAvg += (specS[k]||0)); specAvg = Math.min(specAvg/activeSpec.size,100); }
+  const score = Math.min(100, Math.round(dow*.18 + dom*.22 + tod*.25 + road*.22 + specAvg*.13));
+  // needle: 0→-90deg, 100→+90deg
+  document.getElementById('needle').style.transform = `rotate(${-90+(score/100)*180}deg)`;
+  let lbl, color, sub;
+  if(score<30){lbl='LOW';color='var(--green)';sub='Light enforcement activity historically';}
+  else if(score<55){lbl='MODERATE';color='var(--yellow)';sub='Some risk factors present — stay alert';}
+  else if(score<75){lbl='ELEVATED';color='var(--orange)';sub='Multiple risk factors — drive carefully';}
+  else{lbl='HIGH';color='var(--red)';sub='Peak enforcement conditions';}
+  document.getElementById('rLbl').style.color=color;
+  document.getElementById('rLbl').textContent=lbl;
+  document.getElementById('rSub').textContent=sub;
+  document.getElementById('rScore').textContent=`Composite: ${score}/100`;
+  const factors=[
+    {n:'Time of Day',v:tod},{n:'Day of Month',v:dom},{n:'Road Type',v:road},
+    {n:'Day of Week',v:dow},{n:'Special Conds.',v:specAvg||0}
+  ];
+  document.getElementById('factorBars').innerHTML = factors.map(f=>{
+    const c=f.v<35?'var(--green)':f.v<60?'var(--yellow)':f.v<80?'var(--orange)':'var(--red)';
+    return `<div class="frow"><div class="fname">${f.n}</div><div class="fbar-wrap"><div class="fbar" style="width:${f.v}%;background:${c}"></div></div><div class="fval">${Math.round(f.v)}</div></div>`;
+  }).join('');
+  // Alerts
+  const ab=document.getElementById('alertBox');
+  const alerts=[];
+  const domVal=document.getElementById('dom').value;
+  const roadVal=document.getElementById('road').value;
+  const todVal=document.getElementById('tod').value;
+  if(domVal==='endmonth') alerts.push('📅 End-of-month: 2× citation rate vs mid-month. Officers face informal performance targets.');
+  if(roadVal==='i35e') alerts.push('🔴 I-35E St. Paul: 45 mph limit on an interstate — frequently underestimated. High enforcement.');
+  if(roadVal==='school') alerts.push('🚸 School zone: fines doubled by statute. Automated cameras active. Zero tolerance.');
+  if(roadVal==='construction') alerts.push('🚧 Work zone: $300 minimum fine in MN. Workers present = elevated enforcement.');
+  if(activeSpec.has('aircraft')) alerts.push('✈️ Aircraft patrol: V1, Waze, and all detectors are completely blind. Fly at traffic pace only.');
+  if(activeSpec.has('mpls_cam')) alerts.push('📷 Minneapolis speed camera zone: automated enforcement, ticket by mail, no advance warning possible.');
+  if(activeSpec.has('holiday')) alerts.push('🚨 Maximum Enforcement Period: MSP floods highways. Highest patrol density of the year.');
+  if(todVal==='rush_am'||todVal==='mid_am') alerts.push('⏰ Peak enforcement hour: full shift staffing, officers actively targeting violators.');
+  if(alerts.length){
+    ab.className=`alert show ${score>=75?'alert-r':score>=55?'alert-o':'alert-y'}`;
+    ab.innerHTML=alerts.map(a=>`<div style="margin-bottom:4px">${a}</div>`).join('');
+  } else { ab.className='alert'; }
+}
+
+function useNow() {
+  const n=new Date();
+  const days=['sun','mon','tue','wed','thu','fri','sat'];
+  document.getElementById('dow').value=days[n.getDay()];
+  const h=n.getHours();
+  const tod=h<5?'late_night':h<7?'early_am':h<9?'rush_am':h<10?'mid_am':h<12?'late_am':h<13?'noon':h<15?'pm1':h<17?'pm3':h<21?'eve':'night';
+  document.getElementById('tod').value=tod;
+  const d=n.getDate();
+  document.getElementById('dom').value=d<=5?'early':d<=20?'mid':d<=27?'late':'endmonth';
+  recalc();
+}
+
+// Heat map
+const heatRows=[
+  {l:'5–7am',  d:[2,2,2,1,1,1,1]},
+  {l:'7–9am',  d:[4,4,3,2,2,3,2]},
+  {l:'9–10am', d:[4,3,3,2,2,3,2]},
+  {l:'10–12',  d:[3,2,2,1,2,2,2]},
+  {l:'12–2pm', d:[3,3,3,2,2,3,2]},
+  {l:'2–4pm',  d:[4,4,3,2,2,3,3]},
+  {l:'4–6pm',  d:[3,3,3,2,2,3,2]},
+  {l:'6–9pm',  d:[2,2,2,1,2,2,2]},
+  {l:'9pm–12', d:[3,3,2,2,2,4,3]},
+  {l:'12–5am', d:[1,1,1,1,1,2,2]},
+];
+document.getElementById('heatBody').innerHTML = heatRows.map(r=>
+  `<tr><th style="text-align:right;padding-right:6px;color:var(--muted);font-weight:400;">${r.l}</th>`+
+  r.d.map(v=>`<td class="h${v}">${['–','Low','Mod','Hi','Peak'][v]}</td>`).join('')+`</tr>`
+).join('');
+
+// Month calendar
+const mcal=document.getElementById('mcal');
+['S','M','T','W','T','F','S'].forEach(d=>{const el=document.createElement('div');el.className='mcal-hdr';el.textContent=d;mcal.appendChild(el);});
+for(let d=1;d<=31;d++){
+  const el=document.createElement('div');el.className='mday';
+  if(d>=28){el.style.cssText='background:#2b1515;color:#fca5a5;';}
+  else if(d<=5){el.style.cssText='background:#26230e;color:#fde047;';}
+  else if(d<=10){el.style.cssText='background:#182018;color:#86efac;';}
+  else if(d<=20){el.style.cssText='background:#182018;color:#6ee7b7;';}
+  else{el.style.cssText='background:#22200e;color:#fdba74;';}
+  el.innerHTML=`${d}<br><span style="font-size:0.58rem;opacity:.8">${d>=28?'High':d<=5?'Elev':d<=20?'Low':'Mod'}</span>`;
+  mcal.appendChild(el);
+}
+
+// ─── PLEA CALCULATOR ──────────────────────────────────────
+const pActive = new Set();
+function tPChip(el){const k=el.dataset.k;pActive.has(k)?(pActive.delete(k),el.classList.remove('on')):(pActive.add(k),el.classList.add('on'));calcPlea();}
+
+function calcPlea() {
+  const mph = document.getElementById('pl_mph').value;
+  const rec = document.getElementById('pl_record').value;
+  const loc = document.getElementById('pl_loc').value;
+  const method = document.getElementById('pl_method').value;
+  const atty = pActive.has('hired_atty');
+  const noshow = pActive.has('officer_noshow');
+  const noCalib = pActive.has('no_calib');
+  const emergency = pActive.has('emergency');
+  const polite = pActive.has('polite');
+  const dashcam = pActive.has('dash_cam');
+
+  // Base CFD probability
+  let cfdBase = rec==='clean'?75:rec==='one'?45:rec==='two'?20:5;
+  if(mph==='1') cfdBase+=15;
+  if(mph==='10') cfdBase+=0;
+  if(mph==='20') cfdBase-=20;
+  if(mph==='30') cfdBase-=40;
+  if(mph==='100') cfdBase=0;
+  if(loc==='camera') cfdBase=0;
+  if(loc==='school'||loc==='construction') cfdBase-=15;
+  if(atty) cfdBase+=12;
+  if(polite) cfdBase+=8;
+  cfdBase=Math.max(0,Math.min(96,cfdBase));
+
+  // Plea to non-moving
+  let nonMovBase = rec==='clean'?55:rec==='one'?38:rec==='two'?18:5;
+  if(mph==='1') nonMovBase+=10;
+  if(mph==='20') nonMovBase-=15;
+  if(mph==='30') nonMovBase-=30;
+  if(mph==='100') nonMovBase=0;
+  if(loc==='camera') nonMovBase=0;
+  if(atty) nonMovBase+=15;
+  nonMovBase=Math.max(0,Math.min(90,nonMovBase));
+
+  // Dismiss — officer no-show
+  let noshowProb = noshow?35:12;
+  if(loc==='camera') noshowProb=2;
+  if(method==='camera') noshowProb=2;
+  if(atty) noshowProb+=5;
+
+  // Dismiss — radar calibration
+  let calibProb = 0;
+  if(method==='radar'&&noCalib) calibProb=55;
+  else if(method==='radar') calibProb=18;
+  else if(method==='lidar'&&noCalib) calibProb=38;
+  else if(method==='lidar') calibProb=12;
+  else if(method==='pacing') calibProb=22;
+  else if(method==='vascar') calibProb=8;
+  else if(method==='camera') calibProb=5;
+  if(atty) calibProb+=12;
+  if(dashcam) calibProb+=5;
+  calibProb=Math.min(85,calibProb);
+
+  // Emergency defense
+  let emergProb = emergency?20:0;
+
+  // Full contest (not guilty trial)
+  let contestProb = Math.round((noshowProb*0.3 + calibProb*0.4 + emergProb*0.2 + (atty?15:0)*0.1));
+  contestProb=Math.min(75,contestProb);
+
+  const pleas = [
+    {
+      name:'Continuance for Dismissal (CFD)',
+      prob:cfdBase,
+      outcome:'No conviction, no DVS report, no insurance impact',
+      timeline:'12 months + $150–250 court costs',
+      tags:[{t:'Best Outcome',c:'tag-g'},{t:'No Record',c:'tag-b'},{t:'Prosecutor Approval',c:'tag-y'}],
+      desc:`MN's best resolution: prosecutor agrees to suspend prosecution for up to 12 months. If you stay clean, the charge is dismissed with no guilty plea ever entered. Nothing reported to DVS or insurers. Prosecutors are more likely to offer this for 1st-time minor offenses with a clean record. Hiring an attorney significantly improves negotiating access.`,
+      steps:[
+        'Plead NOT GUILTY by deadline on citation (typically 15–30 days)',
+        'Request continuance / pre-trial hearing',
+        'Attorney or you contact prosecutor to negotiate CFD',
+        'Pay court costs ($150–250) in lieu of fine',
+        'No violations for 12 months → case dismissed automatically'
+      ],
+      disqualifiers: loc==='camera'?['Automated camera tickets not CFD-eligible in current Mpls pilot']:
+        mph==='100'?['100+ mph — CFD extremely unlikely without attorney']:[]
+    },
+    {
+      name:'Plea to Non-Moving Violation',
+      prob:nonMovBase,
+      outcome:'No speeding on record — parking or equipment violation instead',
+      timeline:'1–2 court appearances',
+      tags:[{t:'No Points',c:'tag-g'},{t:'Negotiated',c:'tag-b'},{t:'Insurance Safe',c:'tag-g'}],
+      desc:`Prosecutor agrees to reduce speeding to a non-moving violation (e.g., equipment violation, improper equipment, parking-related). No impact on driving record or insurance. Requires prosecutor willing to deal — most common for clean-record defendants with minor excess speed. Attorney dramatically improves access to this deal.`,
+      steps:[
+        'Plead NOT GUILTY, request pre-trial conference',
+        'Have attorney or contact prosecutor\'s office directly',
+        'Offer to plead guilty to non-moving substitute charge',
+        'Pay reduced fine + court costs',
+        'DMV sees only the non-moving violation — not speeding'
+      ],
+      disqualifiers: loc==='camera'?['Camera tickets not typically plea-eligible']:[]
+    },
+    {
+      name:'Not Guilty — Officer No-Show Dismissal',
+      prob:noshowProb,
+      outcome:'Automatic dismissal if officer fails to appear at hearing',
+      timeline:'1 court date (hearing)',
+      tags:[{t:'Passive Strategy',c:'tag-p'},{t:'Low Effort',c:'tag-b'},{t:'Luck Factor',c:'tag-y'}],
+      desc:`Minnesota traffic courts dismiss cases when the citing officer fails to appear at your hearing. Officer no-show rates are higher for: motorcycle units, overtime shifts, officers transferred/retired, and winter hearing dates. Nationally ~20–40% of contested cases end this way. Request the earliest available hearing date — officers are more likely to miss first available dates.`,
+      steps:[
+        'Plead NOT GUILTY immediately',
+        'Request earliest possible hearing date',
+        'Request discovery (forces officer to prepare file)',
+        'Appear at hearing — if officer absent, move for immediate dismissal',
+        'If officer present, proceed with technical defenses or negotiate'
+      ],
+      disqualifiers: loc==='camera'?['Automated cameras: no officer, no no-show possible']:
+        method==='camera'?['Camera-only citation: no officer attendance needed']:[]
+    },
+    {
+      name:'Not Guilty — Calibration/Technical Defense',
+      prob:calibProb,
+      outcome:'Dismissal or reduction if equipment records are defective',
+      timeline:'2–4 court appearances',
+      tags:[{t:'Technical',c:'tag-p'},{t:'Discovery Required',c:'tag-b'},{t:'Attorney Recommended',c:'tag-y'}],
+      desc:`MN requires: (1) officer adequately trained to operate device, (2) testimony on proper setup, (3) minimal interference during measurement, (4) device tested by reliable external mechanism at setup. Request calibration certificates, maintenance logs, and officer training records via discovery. If any are missing, expired, or incomplete, move to suppress the speed evidence.`,
+      steps:[
+        'Plead NOT GUILTY, request pre-trial',
+        'File written discovery request for: calibration certs, maintenance logs, officer training records, body/dash cam footage',
+        'Review materials — look for expired certs (>30–90 days), missing logs, or device anomalies',
+        'At hearing: challenge foundation for speed evidence',
+        'If suppression granted, charge likely dismissed (no speed = no case)'
+      ],
+      disqualifiers: method==='camera'?['Automated camera: no radar/LIDAR to challenge']:
+        method==='vascar'?['VASCAR is distance/time math — calibration defense weaker']:[]
+    },
+    {
+      name:'Emergency / Necessity Defense',
+      prob:emergProb,
+      outcome:'Dismissal if genuine emergency existed and is documentable',
+      timeline:'1–2 appearances',
+      tags:[{t:'Situational',c:'tag-o'},{t:'Rare',c:'tag-r'},{t:'Must Be Documented',c:'tag-y'}],
+      desc:`MN courts recognize necessity as an affirmative defense: you violated the law to prevent a greater harm (medical emergency, evading an imminent threat). Requires documentation — hospital records, 911 call logs, or witness statements. Judges evaluate credibility carefully. Works best for genuine medical emergencies with paper trail.`,
+      steps:[
+        'Collect all documentation of the emergency immediately',
+        'Get written statements from passengers, medical records, 911 records',
+        'Plead NOT GUILTY — affirmative defense',
+        'Present evidence at hearing: court must accept necessity was genuine and proportionate',
+        'Strong documentation = best chance of dismissal'
+      ],
+      disqualifiers: emergency?[]:['Select "Emergency defense" above if applicable']
+    },
+    {
+      name:'Pay Fine (Guilty Plea)',
+      prob:100,
+      outcome:'Conviction entered, DVS notified, insurance impact at renewal',
+      timeline:'Immediate',
+      tags:[{t:'Worst Outcome',c:'tag-r'},{t:'Conviction',c:'tag-r'},{t:'Insurance Impact',c:'tag-o'}],
+      desc:`Paying the fine is a guilty plea under MN law. The conviction is certified to the MN Department of Public Safety and is visible to insurers at policy renewal. Insurance rate increases from a single speeding conviction can exceed $500/year for 3 years — far exceeding the ticket cost. Only choose this if you are ineligible for CFD and have no technical defenses.`,
+      steps:[
+        'Pay online at mncourts.gov or mail payment by citation deadline',
+        'Conviction certified to DVS within 30 days',
+        'Insurers access DMV records at renewal — expect 10–25% rate increase',
+        'For 100+ mph: license revocation begins separately'
+      ],
+      disqualifiers:[]
+    }
+  ];
+
+  const container = document.getElementById('pleaOptions');
+  container.innerHTML = pleas.sort((a,b)=>b.prob-a.prob).map(p => {
+    const pClass = p.prob>=65?'prob-hi':p.prob>=35?'prob-med':p.prob>=15?'prob-lo':'prob-vlo';
+    const pText = p.prob>=65?'Likely':p.prob>=35?'Moderate':p.prob>=15?'Possible':'Unlikely';
+    const disq = p.disqualifiers&&p.disqualifiers.length?
+      `<div style="font-size:0.73rem;color:#fca5a5;margin-top:6px;">⚠️ ${p.disqualifiers[0]}</div>`:'';
+    return `
+    <div class="plea-card">
+      <div class="plea-header">
+        <div class="plea-name">${p.name}</div>
+        <div class="prob-badge ${pClass}">${pText} (${p.prob}%)</div>
+      </div>
+      <div class="plea-meta">${p.tags.map(t=>`<span class="tag ${t.c}">${t.t}</span>`).join('')}</div>
+      <div style="font-size:0.72rem;color:var(--muted);margin-bottom:6px;">⏱ ${p.timeline} &nbsp;|&nbsp; ✅ ${p.outcome}</div>
+      <div class="prob-bar"><div class="prob-fill" style="width:${p.prob}%;background:${p.prob>=65?'var(--green)':p.prob>=35?'var(--yellow)':p.prob>=15?'var(--orange)':'var(--red)'}"></div></div>
+      <div class="plea-desc" style="margin-top:10px;">${p.desc}</div>
+      <div class="plea-steps"><ol>${p.steps.map(s=>`<li>${s}</li>`).join('')}</ol></div>
+      ${disq}
+    </div>`;
+  }).join('');
+
+  // Strategy box
+  const best = pleas.filter(p=>p.name!=='Pay Fine (Guilty Plea)').sort((a,b)=>b.prob-a.prob)[0];
+  const strat = document.getElementById('stratBox');
+  let stratHtml = `<div class="badge-row"><span class="tag tag-g">Recommended Path</span></div>`;
+  stratHtml += `<div style="font-size:0.88rem;font-weight:700;margin-bottom:6px;">${best.name}</div>`;
+  stratHtml += `<div class="prob-bar"><div class="prob-fill" style="width:${best.prob}%;background:var(--green)"></div></div>`;
+  stratHtml += `<div style="font-size:0.72rem;color:var(--muted);margin:6px 0;">${best.prob}% estimated probability</div>`;
+
+  // Contextual guidance
+  let guidance = '';
+  if(mph==='100') guidance = `<div class="alert alert-r show" style="margin-top:8px;">⚠️ 100+ mph in MN = automatic 6-month license revocation + up to $500 fine. Hire a traffic attorney immediately — this is a misdemeanor charge if endangerment is found.</div>`;
+  else if(loc==='camera') guidance = `<div class="alert alert-y show" style="margin-top:8px;">📷 Camera ticket: CFD and attorney negotiation are generally not available. Contest by mail via the hearing address on the citation. Argue signage compliance or whether school was in session.</div>`;
+  else if(rec==='clean'&&(mph==='1'||mph==='10')) guidance = `<div class="alert alert-g show" style="margin-top:8px;">✅ Strong position: clean record + minor speed = CFD is realistic without an attorney. Call the prosecutor's office after pleading not guilty — many will offer it directly.</div>`;
+  else if(!atty&&(cfdBase>40||nonMovBase>40)) guidance = `<div class="alert alert-y show" style="margin-top:8px;">💡 Consider hiring a traffic attorney for $150–350. Access to prosecutors is significantly better with representation, and CFD or non-moving plea probability increases substantially.</div>`;
+  stratHtml += guidance;
+  strat.innerHTML = stratHtml;
+}
+
+// ─── FINE CALCULATOR ──────────────────────────────────────
+function calcFine() {
+  const mph = parseInt(document.getElementById('fi_mph').value);
+  const county = document.getElementById('fi_county').value;
+  const zone = document.getElementById('fi_zone').value;
+
+  const baseMap = {5:40, 9:70, 14:90, 19:130, 25:150, 35:150, 100:300};
+  let base = baseMap[mph] || 90;
+
+  let zoneLabel = '';
+  if(zone==='school') { base*=2; zoneLabel=' (×2 school zone)'; }
+  if(zone==='construction') { base=Math.max(base,300); zoneLabel=' ($300 min work zone)'; }
+
+  const doubled = mph>=25 && zone==='standard';
+  if(doubled) { base*=2; zoneLabel+=' (×2 — 20+ mph over)'; }
+
+  const surcharge = county==='ramsey'?76:75;
+  const libFee = 10;
+  const total = base + surcharge + libFee;
+
+  document.getElementById('fineBreakdown').innerHTML = `
+    <div style="text-align:center;margin-bottom:14px;">
+      <div style="font-size:0.7rem;color:var(--muted);margin-bottom:4px;">Estimated Total</div>
+      <div class="fine-big">$${total}</div>
+      <div style="font-size:0.72rem;color:var(--muted);">+ potential insurance increase</div>
+    </div>
+    <div class="fine-row"><span>Base fine${zoneLabel}</span><span>$${base}</span></div>
+    <div class="fine-row"><span>Court surcharge (${county==='ramsey'?'Ramsey':'Hennepin/Other'})</span><span>$${surcharge}</span></div>
+    <div class="fine-row"><span>Law library fee</span><span>$${libFee}</span></div>
+    <div class="fine-row"><span><strong>Total due</strong></span><span><strong>$${total}</strong></span></div>
+    <div style="margin-top:10px;padding:10px;background:var(--s2);border-radius:7px;font-size:0.75rem;color:var(--muted);line-height:1.6;">
+      <strong style="color:var(--text)">Insurance cost (est.):</strong> A single speeding conviction can add $400–800/year at renewal for 3 years = <strong style="color:#fca5a5;">$1,200–2,400 in hidden costs</strong> on top of the fine. CFD or non-moving plea avoids this entirely.
+    </div>`;
+}
+
+// Init
+useNow();
+calcPlea();
+calcFine();
+</script>
+</body>
+</html>
