@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>MN Power Structure — Traffic Enforcement</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #f5f5f5; font-family: system-ui, -apple-system, sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  header { padding: 7px 14px; background: #fff; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  header h1 { font-size: 13px; font-weight: 600; color: #111; white-space: nowrap; }
+  header p { font-size: 10px; color: #999; white-space: nowrap; }
+  .legend { display: flex; gap: 10px; flex-wrap: wrap; margin-left: auto; }
+  .legend-item { display: flex; align-items: center; gap: 3px; font-size: 10px; color: #555; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .edge-legend { display: flex; gap: 10px; flex-wrap: wrap; border-left: 1px solid #eee; padding-left: 10px; }
+  .edge-item { display: flex; align-items: center; gap: 3px; font-size: 10px; color: #555; }
+  .edge-line { width: 16px; height: 2px; flex-shrink: 0; }
+  #canvas-container { flex: 1; position: relative; overflow: hidden; }
+  canvas { position: absolute; top: 0; left: 0; cursor: grab; }
+  canvas:active { cursor: grabbing; }
+  #tooltip { position: fixed; background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 10px 13px; font-size: 12px; pointer-events: none; opacity: 0; max-width: 240px; box-shadow: 0 4px 14px rgba(0,0,0,0.12); z-index: 100; transition: opacity 0.15s; }
+  #tooltip h3 { font-size: 12px; font-weight: 600; color: #111; margin-bottom: 4px; }
+  #tooltip p { font-size: 11px; color: #555; line-height: 1.55; }
+  #tooltip .tag { display: inline-block; font-size: 9px; padding: 2px 7px; border-radius: 10px; margin-bottom: 6px; font-weight: 600; letter-spacing: 0.03em; }
+  #hint { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); font-size: 10px; color: #aaa; pointer-events: none; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>MN Traffic Enforcement — Power Structure</h1>
+    <p>Click nodes to explore · scroll to zoom · drag to pan</p>
+  </div>
+  <div class="legend" id="legend"></div>
+  <div class="edge-legend" id="edge-legend"></div>
+</header>
+<div id="canvas-container">
+  <canvas id="network"></canvas>
+  <div id="tooltip"></div>
+  <div id="hint">Living map — updated as new actors and relationships are discovered</div>
+</div>
+
+<script>
+const TYPES = {
+  federal:  { label: 'Federal',          color: '#3a74b8', bg: '#e8f0fa' },
+  exec:     { label: 'State Executive',  color: '#7040b8', bg: '#f0eafa' },
+  legis:    { label: 'Legislature',      color: '#3870b8', bg: '#e8f0fa' },
+  msp:      { label: 'MSP',             color: '#d07830', bg: '#fdf0e0' },
+  union:    { label: 'Labor / Union',    color: '#b83870', bg: '#fae8f0' },
+  local:    { label: 'Local Agency',     color: '#389060', bg: '#e8f5ee' },
+  judicial: { label: 'Judicial',         color: '#a08030', bg: '#faf5e0' },
+  civic:    { label: 'Civic / Media',    color: '#507898', bg: '#e8f0f8' },
+  driver:   { label: 'Driver',           color: '#b83030', bg: '#fae8e8' },
+};
+
+const EDGE_TYPES = {
+  command:     { color: '#444',    label: 'Command' },
+  resource:    { color: '#3a74b8', label: 'Resource' },
+  oversight:   { color: '#a08030', label: 'Oversight' },
+  constraint:  { color: '#b83870', label: 'Constraint' },
+  influence:   { color: '#7040b8', label: 'Influence' },
+  coordinate:  { color: '#389060', label: 'Coordinate' },
+  feedback:    { color: '#888',    label: 'Feedback' },
+  adversarial: { color: '#b83030', label: 'Adversarial' },
+};
+
+// ── TIER LAYOUT ──────────────────────────────────────────────────────────────
+// Each tier = one row in the hierarchy. Y positions are fractional (0=top, 1=bottom).
+// TIER_Y leaves room for tier labels on the left.
+const TIER_LABELS = [
+  { label: 'Federal',         sub: 'funding & oversight' },
+  { label: 'State Political', sub: 'executive + legislature' },
+  { label: 'State Agency',    sub: 'budget & command authority' },
+  { label: 'MSP Command',     sub: 'operational leadership' },
+  { label: 'Labor / Union',   sub: 'contract constraints' },
+  { label: 'Field Operations',sub: 'multi-agency enforcement' },
+  { label: 'Street Level',    sub: 'discretionary actor' },
+  { label: 'Accountability',  sub: 'courts · oversight · media' },
+  { label: 'Public',          sub: 'community & driver' },
+];
+
+// Fractional Y position per tier (0 = top of canvas, 1 = bottom)
+const TIER_Y = [0.06, 0.17, 0.28, 0.39, 0.50, 0.61, 0.72, 0.82, 0.92];
+
+// Node assignment to tiers
+// [tier_index, position_within_tier (0-based)]
+const TIER_SLOTS = {
+  // Tier 0 — Federal
+  nhtsa:     [0, 0],
+  doj:       [0, 1],
+  fhwa:      [0, 2],
+  // Tier 1 — State Political
+  gov:       [1, 0],
+  hpsf:      [1, 1],
+  sjps:      [1, 2],
+  // Tier 2 — State Agency
+  dps:       [2, 0],
+  mmb:       [2, 1],
+  mspcomm:   [2, 2],
+  // Tier 3 — MSP Command
+  msplead:   [3, 0],
+  // Tier 4 — Labor / Union
+  mels:      [4, 0],
+  mpof:      [4, 1],
+  hcdsa:     [4, 2],
+  aflcio:    [4, 3],
+  // Tier 5 — Field Operations
+  postcmd:   [5, 0],
+  mpd:       [5, 1],
+  hcsheriff: [5, 2],
+  metro:     [5, 3],
+  mac:       [5, 4],
+  // Tier 6 — Street Level
+  trooper:   [6, 0],
+  // Tier 7 — Accountability
+  distcourt: [7, 0],
+  pubdef:    [7, 1],
+  lmnc:      [7, 2],
+  aclu:      [7, 3],
+  startrib:  [7, 4],
+  // Tier 8 — Public
+  community: [8, 0],
+  driver:    [8, 1],
+};
+
+// Count nodes per tier
+const TIER_COUNTS = {};
+Object.values(TIER_SLOTS).forEach(([t]) => { TIER_COUNTS[t] = (TIER_COUNTS[t] || 0) + 1; });
+
+// LABEL_MARGIN: fraction of canvas width reserved for tier labels on left
+const LABEL_MARGIN = 0.17;
+
+function computeNodeX(tier, slot) {
+  const count = TIER_COUNTS[tier];
+  const available = 1 - LABEL_MARGIN;
+  const step = available / (count + 1);
+  return LABEL_MARGIN + step * (slot + 1);
+}
+
+const nodes = [
+  { id:'nhtsa',     type:'federal',  label:'NHTSA',              desc:'National Highway Traffic Safety Admin. Funds enforcement grants — DUI, speed, seatbelt. Shapes state priorities through federal dollars.' },
+  { id:'doj',       type:'federal',  label:'DOJ',                desc:'Dept of Justice. Oversight of MPD through consent decree post-2020. Federal civil rights pressure on policing practices.' },
+  { id:'fhwa',      type:'federal',  label:'FHWA',               desc:'Federal Highway Administration. Highway funding tied to state compliance with federal traffic safety standards.' },
+  { id:'gov',       type:'exec',     label:'Governor',           desc:'Tim Walz. Appoints MSP Commissioner and DPS leadership. Sets public safety priorities. Manages political tradeoff between enforcement and civil liberties.' },
+  { id:'hpsf',      type:'legis',    label:'House PS Finance',   desc:'House Public Safety Finance Committee. Controls MSP appropriations. Direct leverage over staffing, equipment, and program budgets.' },
+  { id:'sjps',      type:'legis',    label:'Senate J&PS',        desc:'Senate Judiciary & Public Safety Committee. Sets statute on traffic law — speed limits, fine schedules, forfeiture rules.' },
+  { id:'dps',       type:'exec',     label:'Dept Public Safety', desc:'Umbrella agency over MSP. Commissioner reports to Governor. Manages MSP budget requests and legislative relationships.' },
+  { id:'mmb',       type:'exec',     label:'MMB',                desc:'Minnesota Management & Budget. Controls state budget process. MSP appropriations flow through here before reaching DPS.' },
+  { id:'mspcomm',   type:'exec',     label:'MSP Commissioner',  desc:'Appointed by Governor. Leads MSP. Balances legislative demands, union constraints, public safety mission. Direct relationship with key legislators.' },
+  { id:'msplead',   type:'msp',      label:'MSP Leadership',     desc:'Command staff below Commissioner. Manages statewide deployment strategy, district assignments, performance metrics. Constrained by budget and union contract.' },
+  { id:'mels',      type:'union',    label:'MELS',               desc:'MN Law Enforcement Labor Services. Represents MSP troopers. CBA governs shift bidding, seniority, staffing minimums, discipline procedures, safety rules.' },
+  { id:'mpof',      type:'union',    label:'MPOF',               desc:'Minneapolis Police Officers Federation. Represents MPD. City contract. High political turbulence post-2020. Consent decree pressure creates unique institutional stress.' },
+  { id:'hcdsa',     type:'union',    label:'HCDSA',              desc:'Hennepin County Deputy Sheriffs Association. County contract. Concurrent jurisdiction on some corridors.' },
+  { id:'aflcio',    type:'union',    label:'AFL-CIO / PE',       desc:'Public employee union network. Political donations, endorsements, organized labor coalition. Influences legislative relationships and campaign support.' },
+  { id:'postcmd',   type:'msp',      label:'Post Commander',     desc:'Sergeant/Lieutenant managing a patrol zone. Balances coverage, shift scheduling, officer safety. Enormous practical discretion. Interface between agency directives and street reality.' },
+  { id:'mpd',       type:'local',    label:'MPD',                desc:'Minneapolis Police Dept. City jurisdiction. Under DOJ consent decree. Staffing crisis post-2020 pulls resources from highway-adjacent patrol. Crime density shapes resource allocation.' },
+  { id:'hcsheriff', type:'local',    label:'Hennepin Sheriff',   desc:'County jurisdiction. Concurrent authority on some corridors. Separate budget, separate union, separate deployment logic from MSP.' },
+  { id:'metro',     type:'local',    label:'Metro Transit PD',   desc:'Covers transit infrastructure. Highway-adjacent jurisdiction around stations and park-and-rides. AFSCME contract.' },
+  { id:'mac',       type:'local',    label:'MAC Police',         desc:'Metropolitan Airports Commission Police. 494/62 corridor around MSP airport. Separate jurisdiction, separate contract.' },
+  { id:'trooper',   type:'msp',      label:'Trooper',            desc:'Street-level actor. Most discretion in the system. Decides who to stop, warn, or cite. Constrained by geometry, safety, shift timing, seniority, equipment.' },
+  { id:'distcourt', type:'judicial', label:'District Courts',    desc:'Process contested citations. Judge attitudes toward dismissals directly shape trooper behavior — troopers avoid stops that won\'t stick in their district.' },
+  { id:'pubdef',    type:'judicial', label:'Public Defenders',   desc:'Capacity to contest citations affects how many get challenged. Overloaded PD offices mean fewer contested stops — shifts enforcement risk calculus.' },
+  { id:'lmnc',      type:'civic',    label:'League MN Cities',   desc:'Municipal interests. Often in tension with county and state on jurisdiction and revenue sharing from citations and forfeiture.' },
+  { id:'aclu',      type:'civic',    label:'ACLU Minnesota',     desc:'Consent decree pressure, stops data litigation, civil rights monitoring. Shapes MPD behavior more than MSP directly. Monitors racial disparity in citation patterns.' },
+  { id:'startrib',  type:'civic',    label:'Star Tribune',       desc:'Covers MPD heavily, MSP lightly. Asymmetric media pressure shapes political accountability unevenly across agencies.' },
+  { id:'community', type:'civic',    label:'Community Orgs',     desc:'High-enforcement neighborhood organizations. Complaint patterns influence precinct priorities and council pressure on MPD.' },
+  { id:'driver',    type:'driver',   label:'Driver',             desc:'The adversary. Optimizes for travel time and risk avoidance. Navigates the system rather than obeying it. Interacts only at the point of the stop. Does not say yes to anything.' },
+];
+
+// Assign x/y from tier layout
+nodes.forEach(n => {
+  const [tier, slot] = TIER_SLOTS[n.id];
+  n.tier = tier;
+  n.x = computeNodeX(tier, slot);
+  n.y = TIER_Y[tier];
+});
+
+const edges = [
+  { s:'nhtsa',    t:'dps',       type:'resource',    w:2 },
+  { s:'nhtsa',    t:'msplead',   type:'resource',    w:2 },
+  { s:'doj',      t:'mpd',       type:'oversight',   w:3 },
+  { s:'fhwa',     t:'mmb',       type:'resource',    w:2 },
+  { s:'gov',      t:'dps',       type:'command',     w:3 },
+  { s:'gov',      t:'mmb',       type:'command',     w:2 },
+  { s:'dps',      t:'mspcomm',   type:'command',     w:3 },
+  { s:'mmb',      t:'dps',       type:'resource',    w:2 },
+  { s:'hpsf',     t:'mmb',       type:'command',     w:3 },
+  { s:'sjps',     t:'mmb',       type:'command',     w:3 },
+  { s:'hpsf',     t:'mspcomm',   type:'oversight',   w:2 },
+  { s:'sjps',     t:'mspcomm',   type:'oversight',   w:2 },
+  { s:'mspcomm',  t:'msplead',   type:'command',     w:3 },
+  { s:'msplead',  t:'postcmd',   type:'command',     w:3 },
+  { s:'postcmd',  t:'trooper',   type:'command',     w:3 },
+  { s:'mels',     t:'mspcomm',   type:'constraint',  w:2 },
+  { s:'mels',     t:'msplead',   type:'constraint',  w:2 },
+  { s:'mels',     t:'postcmd',   type:'constraint',  w:3 },
+  { s:'mels',     t:'trooper',   type:'constraint',  w:3 },
+  { s:'mels',     t:'aflcio',    type:'coordinate',  w:1 },
+  { s:'mpof',     t:'mpd',       type:'constraint',  w:3 },
+  { s:'hcdsa',    t:'hcsheriff', type:'constraint',  w:3 },
+  { s:'aflcio',   t:'hpsf',      type:'influence',   w:2 },
+  { s:'aflcio',   t:'sjps',      type:'influence',   w:2 },
+  { s:'msplead',  t:'mpd',       type:'coordinate',  w:1 },
+  { s:'msplead',  t:'hcsheriff', type:'coordinate',  w:1 },
+  { s:'distcourt',t:'trooper',   type:'feedback',    w:2 },
+  { s:'pubdef',   t:'distcourt', type:'influence',   w:2 },
+  { s:'aclu',     t:'mpd',       type:'oversight',   w:2 },
+  { s:'aclu',     t:'sjps',      type:'influence',   w:1 },
+  { s:'startrib', t:'gov',       type:'influence',   w:1 },
+  { s:'community',t:'mpd',       type:'influence',   w:2 },
+  { s:'lmnc',     t:'hpsf',      type:'influence',   w:1 },
+  { s:'trooper',  t:'driver',    type:'adversarial', w:3 },
+  { s:'driver',   t:'trooper',   type:'adversarial', w:2 },
+];
+
+// ── CANVAS ────────────────────────────────────────────────────────────────
+const canvas = document.getElementById('network');
+const ctx = canvas.getContext('2d');
+const container = document.getElementById('canvas-container');
+const tooltip = document.getElementById('tooltip');
+
+let W, H, scale = 1, offsetX = 0, offsetY = 0;
+let isDragging = false, lastMX, lastMY;
+let selectedNode = null;
+const NR = 22;
+
+function resize() {
+  W = container.clientWidth;
+  H = container.clientHeight;
+  canvas.width = W;
+  canvas.height = H;
+  draw();
+}
+
+function nodeScreen(n) {
+  return [((n.x * W) + offsetX) * scale, ((n.y * H) + offsetY) * scale];
+}
+
+function tierScreenY(ti) {
+  return ((TIER_Y[ti] * H) + offsetY) * scale;
+}
+
+function drawArrow(x1, y1, x2, y2, color, w) {
+  const dx = x2-x1, dy = y2-y1, len = Math.sqrt(dx*dx+dy*dy);
+  if (len < 2) return;
+  const ux = dx/len, uy = dy/len;
+  const sx = x1 + ux*NR, sy = y1 + uy*NR;
+  const ex = x2 - ux*(NR+7), ey = y2 - uy*(NR+7);
+  ctx.beginPath();
+  ctx.moveTo(sx, sy);
+  ctx.lineTo(ex, ey);
+  ctx.strokeStyle = color + '77';
+  ctx.lineWidth = Math.max(0.5, w * 0.6);
+  ctx.stroke();
+  const a = Math.atan2(ey-sy, ex-sx);
+  ctx.beginPath();
+  ctx.moveTo(ex, ey);
+  ctx.lineTo(ex - 7*Math.cos(a-0.35), ey - 7*Math.sin(a-0.35));
+  ctx.lineTo(ex - 7*Math.cos(a+0.35), ey - 7*Math.sin(a+0.35));
+  ctx.closePath();
+  ctx.fillStyle = color + 'aa';
+  ctx.fill();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+
+  // ── tier band backgrounds ─────────────────────────────────────────────
+  TIER_LABELS.forEach((tl, ti) => {
+    const bandColors = [
+      '#edf3fb', // federal - blue tint
+      '#f2edfb', // state political - purple tint
+      '#f2edfb', // state agency
+      '#fdf2e6', // msp command - orange tint
+      '#fce8f2', // labor - pink tint
+      '#e8f5ee', // field - green tint
+      '#fdf2e6', // street - orange tint
+      '#fafae5', // accountability - yellow tint
+      '#fce8e8', // public - red tint
+    ];
+    const y1 = ti === 0 ? 0 : ((TIER_Y[ti-1] + TIER_Y[ti]) / 2 * H + offsetY) * scale;
+    const y2 = ti === TIER_LABELS.length-1 ? H * scale : ((TIER_Y[ti] + TIER_Y[ti+1]) / 2 * H + offsetY) * scale;
+    ctx.fillStyle = bandColors[ti] + 'cc';
+    ctx.fillRect(0, y1, W, y2 - y1);
+  });
+
+  // ── tier label column ─────────────────────────────────────────────────
+  const labelW = LABEL_MARGIN * W * scale;
+  ctx.fillStyle = 'rgba(250,250,250,0.85)';
+  ctx.fillRect(0, 0, labelW, H);
+  ctx.strokeStyle = '#ddd';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(labelW, 0);
+  ctx.lineTo(labelW, H);
+  ctx.stroke();
+
+  TIER_LABELS.forEach((tl, ti) => {
+    const py = tierScreenY(ti);
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.font = `600 11px system-ui`;
+    ctx.fillStyle = '#333';
+    ctx.fillText(tl.label, labelW - 8, py - 6);
+    ctx.font = `400 9px system-ui`;
+    ctx.fillStyle = '#999';
+    ctx.fillText(tl.sub, labelW - 8, py + 7);
+  });
+
+  // ── edges ─────────────────────────────────────────────────────────────
+  edges.forEach(e => {
+    const sn = nodes.find(n => n.id === e.s);
+    const tn = nodes.find(n => n.id === e.t);
+    if (!sn || !tn) return;
+    const [sx, sy] = nodeScreen(sn);
+    const [tx, ty] = nodeScreen(tn);
+    drawArrow(sx, sy, tx, ty, EDGE_TYPES[e.type].color, e.w);
+  });
+
+  // ── nodes ─────────────────────────────────────────────────────────────
+  nodes.forEach(n => {
+    const [px, py] = nodeScreen(n);
+    const t = TYPES[n.type];
+    const sel = selectedNode && selectedNode.id === n.id;
+    const r = n.type === 'driver' ? NR + 4 : NR;
+
+    if (sel) {
+      ctx.beginPath();
+      ctx.arc(px, py, r + 5, 0, Math.PI*2);
+      ctx.fillStyle = t.color + '22';
+      ctx.fill();
+    }
+
+    ctx.beginPath();
+    ctx.arc(px, py, r, 0, Math.PI*2);
+    ctx.fillStyle = t.bg;
+    ctx.fill();
+    ctx.strokeStyle = sel ? t.color : t.color + 'cc';
+    ctx.lineWidth = sel ? 2.5 : 1.5;
+    ctx.stroke();
+
+    ctx.fillStyle = '#111';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    const words = n.label.split(' ');
+    const fs = n.label.length > 12 ? 8 : 9;
+    ctx.font = `500 ${fs}px system-ui`;
+    if (words.length <= 1) {
+      ctx.fillText(n.label, px, py);
+    } else if (words.length === 2) {
+      ctx.fillText(words[0], px, py - 5);
+      ctx.fillText(words[1], px, py + 5);
+    } else {
+      const mid = Math.ceil(words.length / 2);
+      ctx.fillText(words.slice(0, mid).join(' '), px, py - 5);
+      ctx.fillText(words.slice(mid).join(' '), px, py + 5);
+    }
+  });
+}
+
+// ── INTERACTION ────────────────────────────────────────────────────────────
+function getNodeAt(cx, cy) {
+  return nodes.find(n => {
+    const [px, py] = nodeScreen(n);
+    const dx = px - cx, dy = py - cy;
+    return Math.sqrt(dx*dx + dy*dy) < (NR + 6) * scale;
+  });
+}
+
+canvas.addEventListener('mousedown', e => {
+  const rect = canvas.getBoundingClientRect();
+  const node = getNodeAt(e.clientX - rect.left, e.clientY - rect.top);
+  if (node) {
+    selectedNode = node;
+    showTooltip(node, e.clientX, e.clientY);
+  } else {
+    selectedNode = null;
+    tooltip.style.opacity = '0';
+    isDragging = true;
+    lastMX = e.clientX; lastMY = e.clientY;
+  }
+  draw();
+});
+
+canvas.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  offsetX += (e.clientX - lastMX) / scale;
+  offsetY += (e.clientY - lastMY) / scale;
+  lastMX = e.clientX; lastMY = e.clientY;
+  draw();
+});
+
+canvas.addEventListener('mouseup', () => { isDragging = false; });
+canvas.addEventListener('mouseleave', () => { isDragging = false; });
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left);
+  const my = (e.clientY - rect.top);
+  const wx = mx / scale - offsetX;
+  const wy = my / scale - offsetY;
+  scale *= e.deltaY < 0 ? 1.1 : 0.9;
+  scale = Math.max(0.25, Math.min(4, scale));
+  offsetX = mx / scale - wx;
+  offsetY = my / scale - wy;
+  draw();
+}, { passive: false });
+
+function showTooltip(node, cx, cy) {
+  const t = TYPES[node.type];
+  tooltip.innerHTML = `<span class="tag" style="background:${t.bg};color:${t.color}">${t.label}</span><h3>${node.label}</h3><p>${node.desc}</p>`;
+  tooltip.style.opacity = '1';
+  tooltip.style.left = Math.min(cx + 14, window.innerWidth - 260) + 'px';
+  tooltip.style.top = Math.max(cy - 70, 50) + 'px';
+}
+
+// ── LEGENDS ────────────────────────────────────────────────────────────────
+const legend = document.getElementById('legend');
+Object.entries(TYPES).forEach(([k, t]) => {
+  const el = document.createElement('div');
+  el.className = 'legend-item';
+  el.innerHTML = `<div class="legend-dot" style="background:${t.color}"></div>${t.label}`;
+  legend.appendChild(el);
+});
+
+const edgeLegend = document.getElementById('edge-legend');
+Object.entries(EDGE_TYPES).forEach(([k, t]) => {
+  const el = document.createElement('div');
+  el.className = 'edge-item';
+  el.innerHTML = `<div class="edge-line" style="background:${t.color}"></div>${t.label}`;
+  edgeLegend.appendChild(el);
+});
+
+window.addEventListener('resize', resize);
+resize();
+</script>
+</body>
+</html>
